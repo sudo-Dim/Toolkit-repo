@@ -33,19 +33,36 @@ Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
 ## 🚀 Schnellstart
 
-### Variante A: Mit Python (Entwicklung)
+### Variante A: Web-Oberfläche
 
 ```bash
-# 1. Abhängigkeiten installieren
 pip install -r requirements.txt
+python start_web.py          # öffnet http://127.0.0.1:5000
+# Windows: START.bat doppelklicken
+```
 
-# 2. Starten
+### Variante B: Light – nur Terminal (ohne Web-UI) 🆕
+
+Schlanke Variante mit animiertem Fortschrittsbalken, ganz ohne Flask/Browser:
+
+```bash
+python -m osint_tool.light                    # interaktiv
+python -m osint_tool.light user@example.com   # einmaliger Scan
+python -m osint_tool.light --type domain example.com --export
+# Windows: START_LIGHT.bat doppelklicken
+```
+
+Optionen: `--type` (Typ erzwingen), `--export` (JSON/TXT/HTML), `--no-color`.
+
+### Variante C: Klassische CLI (Menü)
+
+```bash
 python main.py
 # oder
 python -m osint_tool
 ```
 
-### Variante B: Standalone Windows-EXE
+### Variante D: Standalone Windows-EXE
 
 ```bash
 # 1. Einmalig: Build erstellen

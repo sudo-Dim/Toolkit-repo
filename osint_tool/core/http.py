@@ -20,10 +20,16 @@ DEFAULT_UA = (
 )
 
 
-def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA) -> requests.Session:
-    """Erstellt eine Session mit großem Connection-Pool und Retries.
+def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA,
+                  retries: int = 2) -> requests.Session:
+    """Erstellt eine Session mit großem Connection-Pool und optionalen Retries.
 
     Die Session ist für nebenläufige Nutzung aus mehreren Threads geeignet.
+
+    Args:
+        retries: Anzahl Wiederholungen bei Verbindungsfehlern. 0 = keine Retries
+                 (z.B. für schnelle, fehlertolerante Account-Checks, die nicht
+                 lange an einer hängenden Seite warten sollen).
     """
     session = requests.Session()
     session.headers.update({
@@ -33,23 +39,21 @@ def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA) -> requests
         "Accept-Language": "en-US,en;q=0.9",
     })
 
-    if _HAS_RETRY:
+    if _HAS_RETRY and retries > 0:
         retry = Retry(
-            total=2,
-            connect=2,
+            total=retries,
+            connect=retries,
             read=1,
             backoff_factor=0.4,
             status_forcelist=(500, 502, 503, 504),
             allowed_methods=frozenset(["GET", "HEAD"]),
             raise_on_status=False,
         )
-        adapter = HTTPAdapter(
-            max_retries=retry,
-            pool_connections=pool_size,
-            pool_maxsize=pool_size,
-        )
-    else:  # pragma: no cover
-        adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=pool_size,
+                              pool_maxsize=pool_size)
+    else:
+        adapter = HTTPAdapter(max_retries=0, pool_connections=pool_size,
+                              pool_maxsize=pool_size)
 
     session.mount("https://", adapter)
     session.mount("http://", adapter)

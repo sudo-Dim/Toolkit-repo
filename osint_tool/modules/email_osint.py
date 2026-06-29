@@ -22,7 +22,7 @@ gewertet. Blockierte/Captcha-/Token-fehlt-Antworten gelten als „unklar"
 import re
 import time
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
 from typing import List, Optional
 from urllib.parse import quote
 
@@ -58,16 +58,28 @@ class EmailModule(BaseModule):
     def _ua(self) -> str:
         return self.config.user_agent if self.config else DEFAULT_UA
 
+    # Account-/Token-Checks sollen schnell aufgeben statt zu hängen
+    _ACCT_TIMEOUT = 8        # Sekunden pro Request (kein Retry)
+    _ACCT_BUDGET = 22        # Sekunden Gesamtbudget für die Account-Phase
+
     def _session(self):
         return build_session(user_agent=self._ua())
 
+    def _acct_session(self):
+        """Schnelle, retry-freie Session für Account-Existenz-Checks."""
+        return build_session(user_agent=self._ua(), retries=0)
+
     def _fresh_session(self):
-        """Eigene Session mit isolierten Cookies (für Token-/CSRF-Flows)."""
-        return build_session(user_agent=self._ua())
+        """Eigene Session mit isolierten Cookies (für Token-/CSRF-Flows), ohne Retries."""
+        return build_session(user_agent=self._ua(), retries=0)
 
     @property
     def _timeout(self) -> int:
         return self.config.request_timeout if self.config else 12
+
+    @property
+    def _acct_timeout(self) -> int:
+        return min(self._ACCT_TIMEOUT, self._timeout)
 
     # ── Helfer: Normalisierung & Hashes ────────────────────────
     @staticmethod
@@ -273,7 +285,7 @@ class EmailModule(BaseModule):
         info = {"site": site["name"], "category": site.get("category", "Account"),
                 "reliability": site.get("reliability", "medium")}
         try:
-            kwargs = {"headers": headers, "timeout": self._timeout, "allow_redirects": True}
+            kwargs = {"headers": headers, "timeout": self._acct_timeout, "allow_redirects": True}
             if method == "POST":
                 body = site.get("body")
                 if ct == "json":
@@ -321,7 +333,7 @@ class EmailModule(BaseModule):
         info = {"site": "Strava", "category": "Sport", "reliability": "medium"}
         try:
             s = self._fresh_session()
-            r1 = s.get("https://www.strava.com/register/free", timeout=self._timeout)
+            r1 = s.get("https://www.strava.com/register/free", timeout=self._acct_timeout)
             token = self._search(
                 [r'<meta name="csrf-token" content="([^"]+)"',
                  r'name="authenticity_token"[^>]*value="([^"]+)"'], r1.text)
@@ -333,7 +345,7 @@ class EmailModule(BaseModule):
                        headers={"X-CSRF-Token": token, "X-Requested-With": "XMLHttpRequest",
                                 "Accept": "*/*",
                                 "Referer": "https://www.strava.com/register/free"},
-                       timeout=self._timeout)
+                       timeout=self._acct_timeout)
             body = (r2.text or "").strip().lower()
             if body == "false":
                 info["verdict"] = "exists"
@@ -350,7 +362,7 @@ class EmailModule(BaseModule):
         info = {"site": "eBay", "category": "Marktplatz", "reliability": "medium"}
         try:
             s = self._fresh_session()
-            r1 = s.get("https://www.ebay.com/signin/", timeout=self._timeout)
+            r1 = s.get("https://www.ebay.com/signin/", timeout=self._acct_timeout)
             srt = self._search([r'name="srt"[^>]*value="([^"]+)"', r'"srt"\s*:\s*"([^"]+)"'], r1.text)
             if not srt:
                 info["verdict"] = "inconclusive"
@@ -362,7 +374,7 @@ class EmailModule(BaseModule):
                                  "Origin": "https://www.ebay.com",
                                  "Referer": "https://www.ebay.com/signin/",
                                  "X-Requested-With": "XMLHttpRequest"},
-                        timeout=self._timeout)
+                        timeout=self._acct_timeout)
             try:
                 js = r2.json()
             except Exception:
@@ -385,7 +397,7 @@ class EmailModule(BaseModule):
                       "&openid.assoc_handle=usflex&openid.mode=checkid_setup"
                       "&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
                       "&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0")
-            r1 = s.get(openid, timeout=self._timeout)
+            r1 = s.get(openid, timeout=self._acct_timeout)
             fields = dict(re.findall(r'<input[^>]+name="([^"]+)"[^>]+value="([^"]*)"', r1.text))
             if not fields or "appActionToken" not in " ".join(fields.keys()) + " ".join(fields):
                 # Mindestens ein paar Hidden-Felder erwartet; sonst Captcha/Block
@@ -397,7 +409,7 @@ class EmailModule(BaseModule):
             fields["email"] = email
             r2 = s.post("https://www.amazon.com/ap/signin", data=fields,
                         headers={"Origin": "https://www.amazon.com", "Referer": openid},
-                        timeout=self._timeout)
+                        timeout=self._acct_timeout)
             t = (r2.text or "").lower()
             if "auth-password-missing-alert" in t:
                 info["verdict"] = "exists"
@@ -415,7 +427,7 @@ class EmailModule(BaseModule):
         try:
             s = self._fresh_session()
             r1 = s.get("https://www.tumblr.com/register?source=login_register_center",
-                       timeout=self._timeout)
+                       timeout=self._acct_timeout)
             bearer = self._search([r'"API_TOKEN"\s*:\s*"([^"]+)"',
                                     r'"apiToken"\s*:\s*"([^"]+)"',
                                     r'Bearer ([A-Za-z0-9_\-]{20,})'], r1.text)
@@ -434,7 +446,7 @@ class EmailModule(BaseModule):
             if csrf:
                 headers["X-CSRF"] = csrf
             r2 = s.post("https://www.tumblr.com/api/v2/register/account/validate",
-                        json={"email": email}, headers=headers, timeout=self._timeout)
+                        json={"email": email}, headers=headers, timeout=self._acct_timeout)
             try:
                 js = r2.json()
             except Exception:
@@ -695,13 +707,19 @@ class EmailModule(BaseModule):
         self.report_progress(step[0], total_steps, "Prüfe Account-Existenz auf vielen Seiten...")
         found_sites, unclear = [], []
         workers = self.config.max_concurrent_requests if self.config else 20
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futs = {}
-            for s in EMAIL_ACCOUNT_SITES:
-                futs[ex.submit(self._check_account_site, s, tokens, session)] = s["name"]
-            for fn in self._token_checks():
-                futs[ex.submit(fn, email_l)] = fn.__name__
-            for fut in as_completed(futs):
+        acct_session = self._acct_session()
+        ex = ThreadPoolExecutor(max_workers=workers)
+        futs = {}
+        for s in EMAIL_ACCOUNT_SITES:
+            futs[ex.submit(self._check_account_site, s, tokens, acct_session)] = s["name"]
+        for fn in self._token_checks():
+            futs[ex.submit(fn, email_l)] = fn.__name__.replace("_chk_", "").title()
+        processed = set()
+        try:
+            # Hartes Gesamtbudget: hängt eine Quelle (z.B. Amazon), wird nicht
+            # die ganze Phase blockiert — Reste werden als „unklar" markiert.
+            for fut in as_completed(futs, timeout=self._ACCT_BUDGET):
+                processed.add(fut)
                 try:
                     info = fut.result()
                 except Exception as exc:
@@ -723,6 +741,12 @@ class EmailModule(BaseModule):
                 else:
                     unclear.append(info.get("site", "?"))
                 tick(f"{info.get('site', '?')} geprüft")
+        except FuturesTimeout:
+            for fut, nm in futs.items():
+                if fut not in processed:
+                    unclear.append(nm)
+        finally:
+            ex.shutdown(wait=False, cancel_futures=True)
         if unclear:
             self.add_result(OSINTResult(
                 source="Account-Checks", module=self.name, category="Account",
