@@ -1,4 +1,4 @@
-# 🔍 OSINT Recon Tool v1.1
+# 🔍 OSINT Recon Tool v1.2
 
 Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
@@ -12,9 +12,10 @@ Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 |-------|---------|------------|
 | **Username** | `@john_doe` | Prüft **~60 Plattformen** mit präziser Sherlock-Detektion (echter 404 / Not-Found-Text / Redirect) statt naivem „HTTP 200". Seiten, die anonym nicht zuverlässig prüfbar sind (Instagram, X, TikTok, LinkedIn, StackOverflow …), werden als manueller Link markiert – **keine False Positives**. Mit hinterlegtem Login (`site_auth`) werden auch diese geprüft. |
 | **E-Mail** | `test@example.com` | Format & Normalisierung (Gmail-Kanonisierung), Provider (Domain + MX), **MX/SPF/DMARC**, Wegwerf-/Rollen-Konto-Erkennung, **Gravatar** (Name/Ort/verknüpfte Accounts), **GitHub** (Commit-/User-Suche per E-Mail), **Account-Existenz im Holehe-Stil** über viele Seiten inkl. Microsoft/Office 365, Spotify, Strava, eBay, Amazon, Tumblr u.a., **keyfreie Breach-Checks** (XposedOrNot, LeakCheck, ProxyNova) sowie optional HIBP/Hunter/DeHashed, plus generierte **Such-/Dork-Links** |
-| **Telefon** | `+43 660 1234567` | Ländererkennung, Carrier-Lookup (NumVerify), Telefonbuch-Links |
-| **Domain/IP** | `example.com` / `1.2.3.4` | DNS-Records, WHOIS/RDAP, HTTP-Header, SSL-Zertifikat, Subdomains (crt.sh), robots.txt |
-| **Name** | `Max Mustermann` | Google Dorks, Plattform-Suchlinks, Username-Varianten, People-Search-Engines |
+| **Telefon** | `+43 660 1234567` | **libphonenumber**: Land/Region, Geocoding, **Carrier**, Nummerntyp (Mobil/Festnetz/VoIP), Zeitzonen, alle Formate; Messaging-Links (WhatsApp/Telegram/Viber); Reverse-Lookup/Spam/Telefonbuch (Truecaller, tellows, Das Örtliche, Herold …); NumVerify optional |
+| **Domain/IP** | `example.com` / `1.2.3.4` | DNS (A/AAAA/MX/NS/TXT/SOA/CNAME/SRV/CAA, DoH-Fallback), **SPF/DMARC/DKIM**, RDAP/WHOIS, TLS-Zertifikat, HTTP-Security-Header-Grade, Subdomains (crt.sh), robots/sitemap/**security.txt**, **IP-Geo/ASN** (ipwho.is/ip-api), **offene Ports & CVEs via Shodan InternetDB (keyfrei!)**, Wayback; Shodan optional |
+| **Name** | `Max Mustermann` | Einzeln klickbare Such-/Dork-Links (Suchmaschinen, Social via Google-Dorks, **People-Search US**, **DE/AT/EU-Verzeichnisse & Register** – Das Telefonbuch, Herold, North Data, Handelsregister, OpenCorporates), Username-Varianten, **live ORCID- & GitHub-Suche** |
+| **Bild/Gesicht** 🆕 | `bild.jpg` / Bild-URL | **Grundstein** für PimEyes-artige Gesichtssuche: Direktlinks zu Reverse-Face-/Image-Engines (Google Lens, Yandex, Bing, TinEye, PimEyes, FaceCheck.ID, Search4Faces, Lenso.ai), optionale lokale Gesichts-Detektion, dokumentierte ML-Roadmap (Detection→Embedding→Index→Matching) |
 
 ### Allgemein
 - ✅ **Auto-Erkennung** des Eingabetyps
@@ -137,7 +138,9 @@ osint_tool/
 ├── data/                # Datentabellen (JSON)
 │   ├── username_platforms.json   # ~60 Plattformen + Detektionsregeln
 │   ├── email_sources.json        # Account-Checks + Dork-Links
-│   └── disposable_domains.json   # Wegwerf-Mail-Domains
+│   ├── disposable_domains.json   # Wegwerf-Mail-Domains
+│   ├── name_sources.json         # Namens-Such-/Register-Links
+│   └── face_search_engines.json  # Reverse-Face-/Image-Engines
 ├── core/
 │   ├── __init__.py
 │   ├── config.py        # Konfiguration, Daten-Loader, site_auth
@@ -151,7 +154,8 @@ osint_tool/
     ├── email_osint.py   # E-Mail-Analyse
     ├── phone.py         # Telefonnummer-Analyse
     ├── domain.py        # Domain/IP-Recon
-    └── name_search.py   # Namenssuche
+    ├── name_search.py   # Namenssuche
+    └── face_recognition.py  # Gesichts-/Bildsuche (Grundstein)
 ```
 
 ### Eigenes Modul hinzufügen
@@ -225,7 +229,10 @@ reporter.export_html(result)
 | Paket | Version | Pflicht | Zweck |
 |-------|---------|---------|-------|
 | `requests` | ≥2.28 | ✅ | HTTP-Requests |
-| `dnspython` | ≥2.3 | ❌ | Erweiterte DNS-Auflösung |
+| `flask` | ≥3.0 | ✅ | Web-Oberfläche |
+| `phonenumbers` | ≥8.13 | ⭐ empfohlen | Land/Carrier/Typ/Zeitzone (Telefon) |
+| `dnspython` | ≥2.3 | ⭐ empfohlen | DNS inkl. SPF/DMARC/DKIM/CAA |
+| `opencv-python` / `insightface` / `onnxruntime` / `faiss-cpu` | – | ❌ optional | Lokale Gesichtserkennung (Modul *face*, im Aufbau) |
 | `pyinstaller` | ≥6.0 | ❌ | Nur zum Erstellen der EXE |
 
 ---
@@ -238,10 +245,34 @@ Die Nutzung gegen Dritte ohne deren Einverständnis kann rechtswidrig sein.
 
 ---
 
-## 🔮 Geplante Erweiterungen
+## 🧠 Gesichtserkennung — Roadmap (Grundstein gelegt)
 
-- [ ] GUI (Tkinter / PyQt / Web-Interface)
-- [ ] Weitere Module (Social Media Scraping, EXIF-Analyse, etc.)
+Das Modul **`face`** ist als Fundament angelegt. Schon nutzbar (ohne ML):
+Reverse-Face-/Image-Such-Direktlinks (Google Lens, Yandex, Bing, TinEye) sowie
+Verweise auf spezialisierte Engines (PimEyes, FaceCheck.ID, Search4Faces,
+Lenso.ai) und optionale lokale Gesichts-Detektion (OpenCV, falls installiert).
+
+Geplanter Ausbau zu einer PimEyes-artigen Eigenlösung (`FaceEngine` in
+`modules/face_recognition.py` definiert die Schnittstelle):
+
+1. **Detection** – Gesichter finden (RetinaFace / MTCNN / MediaPipe)
+2. **Alignment** – Normalisierung über 5-Punkt-Landmarks
+3. **Embedding** – 512-d Vektor je Gesicht (ArcFace / InsightFace `buffalo_l`)
+4. **Index** – Vektor-Datenbank (FAISS / hnswlib) über gecrawlte Web-Bilder
+5. **Matching** – Cosine-Similarity + Schwellenwert → Treffer mit Quelle
+6. **Crawler** – sammelt & indexiert öffentlich zugängliche Bilder
+
+> ⚠️ **Rechtlich/ethisch:** Biometrische Gesichtssuche ist hochsensibel und
+> stark reguliert (EU/DSGVO Art. 9, US-BIPA). Nur mit Einwilligung bzw. klarer
+> Autorisierung nutzen.
+
+## 🔮 Weitere geplante Erweiterungen
+
+- [x] Web-Interface (Flask)
+- [x] Präzise Username-Detektion ohne False Positives
+- [x] Breit aufgestelltes E-Mail-Modul (keyfreie Quellen)
+- [ ] Lokale Gesichtserkennung aktiv schalten (siehe Roadmap oben)
+- [ ] EXIF-/Metadaten-Analyse für Bilder
 - [ ] Datenbank-Backend für Ergebnis-Historisierung
 - [ ] Plugin-System für Community-Module
-- [ ] Netzwerk-Graph-Visualisierung
+- [ ] Netzwerk-Graph-Visualisierung (Entitäts-Verknüpfung)

@@ -7,8 +7,19 @@ requests>=2.28.0
 # Web-GUI
 flask>=3.0.0
 
-# Optional aber empfohlen (erweiterte DNS-Auflösung)
+# Empfohlen: präzise Telefon-Analyse (Land/Carrier/Typ/Zeitzone)
+phonenumbers>=8.13.0
+
+# Empfohlen: erweiterte DNS-Auflösung (MX/TXT/SPF/DMARC/DKIM/CAA)
 dnspython>=2.3.0
+
+# ── Optional: lokale Gesichtserkennung (Modul "face", noch im Aufbau) ──
+# Erst installieren, wenn die lokale Gesichts-Engine genutzt werden soll:
+#   opencv-python>=4.8     # Gesichts-Detektion (Haar/DNN)
+#   insightface>=0.7       # ArcFace-Embeddings (PimEyes-artig)
+#   onnxruntime>=1.16      # Inferenz-Backend für insightface
+#   faiss-cpu>=1.7         # Vektor-Index für Embedding-Matching
+#   numpy, Pillow
 
 # Für Windows-EXE-Erstellung (nur zum Builden nötig)
 # pyinstaller>=6.0

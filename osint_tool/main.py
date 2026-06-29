@@ -61,7 +61,7 @@ def print_banner():
     ║  ╚██████╔╝███████║██║██║ ╚████║   ██║               ║
     ║   ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝               ║
     ║                                                      ║
-    ║        R E C O N   T O O L   v1.0                    ║
+    ║        R E C O N   T O O L   v1.2                    ║
     ║        OSINT Intelligence Gathering                  ║
     ║                                                      ║
     ╚══════════════════════════════════════════════════════╝
@@ -83,8 +83,9 @@ def print_menu():
   {Colors.CYAN}[4]{Colors.RESET} 📞  Telefonnummer-Analyse
   {Colors.CYAN}[5]{Colors.RESET} 🌐  Domain/IP-Analyse
   {Colors.CYAN}[6]{Colors.RESET} 🔎  Namenssuche
-  {Colors.CYAN}[7]{Colors.RESET} 📋  Multi-Scan  {Colors.DIM}(mehrere Eingaben){Colors.RESET}
-  {Colors.CYAN}[8]{Colors.RESET} ⚙️   Einstellungen
+  {Colors.CYAN}[7]{Colors.RESET} 🖼️   Bild-/Gesichtssuche  {Colors.DIM}(Pfad oder Bild-URL){Colors.RESET}
+  {Colors.CYAN}[8]{Colors.RESET} 📋  Multi-Scan  {Colors.DIM}(mehrere Eingaben){Colors.RESET}
+  {Colors.CYAN}[9]{Colors.RESET} ⚙️   Einstellungen
   {Colors.CYAN}[0]{Colors.RESET} 🚪  Beenden
 {Colors.GRAY}{'─' * 40}{Colors.RESET}""")
 
@@ -213,6 +214,10 @@ def settings_menu(config: AppConfig):
             keys = {
                 "hibp": "Have I Been Pwned",
                 "hunter": "Hunter.io",
+                "emailrep": "EmailRep.io",
+                "dehashed": "DeHashed",
+                "leakcheck": "LeakCheck PRO",
+                "github": "GitHub Token",
                 "shodan": "Shodan",
                 "numverify": "NumVerify",
             }
@@ -293,6 +298,12 @@ def main():
                     run_scan(engine, reporter, value, "name")
 
             elif choice == "7":
+                # Bild / Gesicht
+                value = input(f"\n  {Colors.WHITE}Bildpfad oder Bild-URL:{Colors.RESET} ").strip()
+                if value:
+                    run_scan(engine, reporter, value, "image")
+
+            elif choice == "8":
                 # Multi-Scan
                 print(f"\n  {Colors.DIM}Gib mehrere Werte ein (leer = fertig):{Colors.RESET}")
                 inputs = []
@@ -312,7 +323,7 @@ def main():
                             print(f"    {Colors.GREEN}✓{Colors.RESET} {fmt.upper()}: {path}")
                         print()
 
-            elif choice == "8":
+            elif choice == "9":
                 settings_menu(config)
 
             else:

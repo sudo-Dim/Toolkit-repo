@@ -40,7 +40,7 @@ def load_data(filename: str, key: Optional[str] = None, default=None):
 class AppConfig:
     """Hauptkonfiguration der Anwendung."""
     app_name: str = "OSINT Recon Tool"
-    version: str = "1.1.0"
+    version: str = "1.2.0"
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -244,7 +244,11 @@ DISPOSABLE_DOMAINS: set = set(load_data("disposable_domains.json", "domains", []
 # ──────────────────────────────────────────────
 # Domain-Modul: DNS-Record-Typen
 # ──────────────────────────────────────────────
-DNS_RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "SRV"]
+DNS_RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "SRV", "CAA"]
+
+# Häufige DKIM-Selektoren (für die Selector-Probe)
+DKIM_SELECTORS = ["google", "default", "selector1", "selector2", "k1", "k2",
+                  "dkim", "mail", "smtp", "s1", "s2", "mandrill", "mailjet"]
 
 
 # ──────────────────────────────────────────────

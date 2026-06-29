@@ -106,8 +106,14 @@ class OSINTEngine:
         value = value.strip()
 
         # Schutz vor pathologisch langen Eingaben (Regex-Backtracking/DoS)
-        if len(value) > 100:
+        if len(value) > 200:
             return "username"
+
+        # Bild / Gesicht: lokaler Pfad oder URL, die auf eine Bilddatei zeigt
+        _img_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff")
+        _path = value.lower().split("?")[0].split("#")[0]
+        if value.startswith("file://") or _path.endswith(_img_exts):
+            return "image"
 
         # E-Mail
         if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', value):

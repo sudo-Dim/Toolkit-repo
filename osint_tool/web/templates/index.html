@@ -721,7 +721,7 @@ main {
     <!-- ═══ Hero ═══ -->
     <section class="hero">
         <h1>Intelligence<br><span>Gathering.</span></h1>
-        <p>Gib einen Namen, eine E-Mail, einen Username, eine Telefonnummer oder Domain ein.</p>
+        <p>Gib einen Namen, eine E-Mail, einen Username, eine Telefonnummer, eine Domain oder eine Bild-URL ein.</p>
     </section>
 
     <!-- ═══ Search ═══ -->
@@ -757,6 +757,9 @@ main {
             </button>
             <button class="type-pill" data-type="name" onclick="selectType(this)">
                 <span class="dot"></span>Name
+            </button>
+            <button class="type-pill" data-type="image" onclick="selectType(this)">
+                <span class="dot"></span>Bild / Gesicht
             </button>
         </div>
 
@@ -804,6 +807,8 @@ const TYPE_META = {
     ip:          { icon: "🌐", bg: "rgba(90, 200, 250, 0.08)", label: "IP-Adresse" },
     name:        { icon: "🔎", bg: "rgba(255, 149, 0, 0.08)",  label: "Name" },
     name_search: { icon: "🔎", bg: "rgba(255, 149, 0, 0.08)",  label: "Name" },
+    image:       { icon: "🖼️", bg: "rgba(255, 45, 85, 0.08)",  label: "Bild/Gesicht" },
+    face:        { icon: "🖼️", bg: "rgba(255, 45, 85, 0.08)",  label: "Bild/Gesicht" },
 };
 
 

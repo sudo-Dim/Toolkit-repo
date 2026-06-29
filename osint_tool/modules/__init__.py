@@ -8,6 +8,7 @@ from .email_osint import EmailModule
 from .phone import PhoneModule
 from .domain import DomainModule
 from .name_search import NameModule
+from .face_recognition import FaceModule
 
 # Alle verfügbaren Module
 ALL_MODULES = [
@@ -16,6 +17,7 @@ ALL_MODULES = [
     PhoneModule,
     DomainModule,
     NameModule,
+    FaceModule,
 ]
 
 # Mapping: input_type -> Liste von Modulen die diesen Typ verarbeiten
@@ -33,4 +35,5 @@ __all__ = [
     "PhoneModule",
     "DomainModule",
     "NameModule",
+    "FaceModule",
 ]

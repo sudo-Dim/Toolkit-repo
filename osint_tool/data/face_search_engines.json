@@ -1,0 +1,13 @@
+{
+  "_comment": "Reverse-Face- / Reverse-Image-Suchmaschinen. accepts_url=true => Engine akzeptiert eine Bild-URL als Query-Parameter (Direktlink moeglich). accepts_url=false => Upload-only, wir verlinken nur die Startseite. {imgurl} = URL-kodierte Bild-URL.",
+  "engines": [
+    {"name": "PimEyes", "category": "Gesichtssuche", "accepts_url": false, "url": "https://pimeyes.com/en", "notes": "Spezialisierte Gesichtssuche (Upload). Stark, teils kostenpflichtig."},
+    {"name": "FaceCheck.ID", "category": "Gesichtssuche", "accepts_url": false, "url": "https://facecheck.id/", "notes": "Gesichtssuche fuer Social Media / News (Upload)."},
+    {"name": "Search4Faces", "category": "Gesichtssuche", "accepts_url": false, "url": "https://search4faces.com/en/", "notes": "Findet VK/Odnoklassniki/TikTok/Instagram-Profile per Gesicht (Upload)."},
+    {"name": "Lenso.ai", "category": "Gesichtssuche", "accepts_url": false, "url": "https://lenso.ai/", "notes": "KI-Reverse-Image/Gesichtssuche (Upload)."},
+    {"name": "Google Lens", "category": "Bildsuche", "accepts_url": true, "url": "https://lens.google.com/uploadbyurl?url={imgurl}", "notes": "Allgemeine Bildsuche, akzeptiert Bild-URL."},
+    {"name": "Yandex Images", "category": "Bildsuche", "accepts_url": true, "url": "https://yandex.com/images/search?rpt=imageview&url={imgurl}", "notes": "Sehr stark bei Gesichtern/Personen, akzeptiert Bild-URL."},
+    {"name": "Bing Visual Search", "category": "Bildsuche", "accepts_url": true, "url": "https://www.bing.com/images/search?view=detailv2&iss=sbi&q=imgurl:{imgurl}", "notes": "Akzeptiert Bild-URL."},
+    {"name": "TinEye", "category": "Bildsuche", "accepts_url": true, "url": "https://tineye.com/search?url={imgurl}", "notes": "Findet Kopien/Quellen eines Bildes (kein Gesichts-Matching), akzeptiert URL."}
+  ]
+}

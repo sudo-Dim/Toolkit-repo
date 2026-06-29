@@ -1,0 +1,43 @@
+{
+  "_comment": "Link-Generatoren fuer die Namenssuche. Platzhalter: {q}=quote_plus(name), {first},{last}, {first_last}=lowercase-hyphen, {First_Last}=Title-hyphen, {first_plus_last}=first+last. Werden als einzeln klickbare Ergebnisse ausgegeben.",
+  "links": [
+    {"name": "Google — exakter Name", "category": "Suchmaschine", "url": "https://www.google.com/search?q=%22{q}%22"},
+    {"name": "Bing — exakter Name", "category": "Suchmaschine", "url": "https://www.bing.com/search?q=%22{q}%22"},
+    {"name": "DuckDuckGo — exakter Name", "category": "Suchmaschine", "url": "https://duckduckgo.com/?q=%22{q}%22"},
+    {"name": "Google — PDF-Dokumente", "category": "Dokumente", "url": "https://www.google.com/search?q=%22{q}%22+filetype%3Apdf"},
+    {"name": "Google — E-Mail/Kontakt-Pivot", "category": "Dokumente", "url": "https://www.google.com/search?q=%22{q}%22+(%22%40gmail.com%22+OR+%22%40gmx.de%22+OR+%22email%22+OR+%22kontakt%22)"},
+
+    {"name": "LinkedIn (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Alinkedin.com%2Fin+%22{q}%22"},
+    {"name": "Xing (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Axing.com+%22{q}%22"},
+    {"name": "Facebook (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Afacebook.com+%22{q}%22"},
+    {"name": "Instagram (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Ainstagram.com+%22{q}%22"},
+    {"name": "X/Twitter (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=(site%3Ax.com+OR+site%3Atwitter.com)+%22{q}%22"},
+    {"name": "TikTok (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Atiktok.com+%22{q}%22"},
+    {"name": "GitHub (Google-Dork)", "category": "Social (Dork)", "url": "https://www.google.com/search?q=site%3Agithub.com+%22{q}%22"},
+
+    {"name": "LinkedIn People-Suche", "category": "Professional", "url": "https://www.linkedin.com/search/results/people/?keywords={q}"},
+    {"name": "Xing Mitglieder-Suche (DACH)", "category": "Professional", "url": "https://www.xing.com/search/members?keywords={q}"},
+
+    {"name": "TruePeopleSearch (US)", "category": "People Search (US)", "url": "https://www.truepeoplesearch.com/results?name={q}"},
+    {"name": "FastPeopleSearch (US)", "category": "People Search (US)", "url": "https://www.fastpeoplesearch.com/name/{first_last}"},
+    {"name": "ThatsThem (US)", "category": "People Search (US)", "url": "https://thatsthem.com/name/{First_Last}"},
+    {"name": "Whitepages (US)", "category": "People Search (US)", "url": "https://www.whitepages.com/name/{First_Last}"},
+    {"name": "Spokeo (US)", "category": "People Search (US)", "url": "https://www.spokeo.com/{First_Last}"},
+
+    {"name": "Das Telefonbuch (DE)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://www.dastelefonbuch.de/Suche/{q}"},
+    {"name": "Das Örtliche (DE)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://www.dasoertliche.de/?kw={q}"},
+    {"name": "11880 (DE)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://www.11880.com/suche/{q}/deutschland"},
+    {"name": "Herold (AT)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://www.herold.at/telefonbuch/was_wer/{q}/"},
+    {"name": "Yasni (DE/EU)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://www.yasni.de/{first_plus_last}/suche/person"},
+    {"name": "WebMii (global)", "category": "Verzeichnis (DE/AT/EU)", "url": "https://webmii.com/people?n=%22{q}%22"},
+
+    {"name": "North Data (DE/EU Register)", "category": "Register/Firmen", "url": "https://www.northdata.com/_search?query={q}"},
+    {"name": "Handelsregister (DE)", "category": "Register/Firmen", "url": "https://www.handelsregister.de/rp_web/erweiterteregistersuche.xhtml"},
+    {"name": "Bundesanzeiger (DE)", "category": "Register/Firmen", "url": "https://www.bundesanzeiger.de/pub/de/suchen?7&fulltext={q}"},
+    {"name": "OpenCorporates Officers (global)", "category": "Register/Firmen", "url": "https://opencorporates.com/officers?q={q}"},
+
+    {"name": "Google Scholar (Autor)", "category": "Akademisch", "url": "https://scholar.google.com/scholar?q=author%3A%22{q}%22"},
+    {"name": "DBLP (Informatik)", "category": "Akademisch", "url": "https://dblp.org/search?q={q}"},
+    {"name": "ResearchGate (Google-Dork)", "category": "Akademisch", "url": "https://www.google.com/search?q=site%3Aresearchgate.net+%22{q}%22"}
+  ]
+}
