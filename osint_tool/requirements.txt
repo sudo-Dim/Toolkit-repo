@@ -1,0 +1,14 @@
+# OSINT Recon Tool - Abhängigkeiten
+# ===================================
+
+# Kern-Abhängigkeiten
+requests>=2.28.0
+
+# Web-GUI
+flask>=3.0.0
+
+# Optional aber empfohlen (erweiterte DNS-Auflösung)
+dnspython>=2.3.0
+
+# Für Windows-EXE-Erstellung (nur zum Builden nötig)
+# pyinstaller>=6.0

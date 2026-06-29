@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT Recon</title>
+<style>
+/* ═══════════════════════════════════════════════
+   Apple-Style Design System
+   ═══════════════════════════════════════════════ */
+
+:root {
+    /* Palette */
+    --bg:              #f5f5f7;
+    --bg-elevated:     #ffffff;
+    --bg-secondary:    #f2f2f7;
+    --bg-tertiary:     #e5e5ea;
+
+    --text-primary:    #1d1d1f;
+    --text-secondary:  #86868b;
+    --text-tertiary:   #aeaeb2;
+
+    --accent:          #0071e3;
+    --accent-hover:    #0077ed;
+    --accent-subtle:   rgba(0, 113, 227, 0.08);
+
+    --green:           #34c759;
+    --orange:          #ff9500;
+    --red:             #ff3b30;
+    --indigo:          #5856d6;
+    --teal:            #5ac8fa;
+    --pink:            #ff2d55;
+
+    --border:          rgba(0, 0, 0, 0.04);
+    --shadow-sm:       0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-md:       0 4px 14px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+    --shadow-lg:       0 12px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+
+    --radius-sm:       10px;
+    --radius-md:       14px;
+    --radius-lg:       20px;
+    --radius-xl:       28px;
+
+    --font:            -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                       "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+
+    --ease:            cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --spring:          cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+::selection {
+    background: rgba(0, 113, 227, 0.15);
+}
+
+/* ═══════════════════════════════════════════════
+   Navigation Bar (Frosted Glass)
+   ═══════════════════════════════════════════════ */
+
+nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(245, 245, 247, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.09);
+}
+
+nav .logo {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+nav .logo-icon {
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+nav .logo-icon svg {
+    width: 13px;
+    height: 13px;
+    fill: white;
+}
+
+/* ═══════════════════════════════════════════════
+   Layout
+   ═══════════════════════════════════════════════ */
+
+main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 52px 24px 120px;
+}
+
+/* ═══════════════════════════════════════════════
+   Hero Section
+   ═══════════════════════════════════════════════ */
+
+.hero {
+    text-align: center;
+    padding: 80px 0 48px;
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.7s var(--ease) forwards;
+}
+
+.hero h1 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.hero h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--indigo));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero p {
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+/* ═══════════════════════════════════════════════
+   Search Input
+   ═══════════════════════════════════════════════ */
+
+.search-container {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.7s var(--ease) 0.15s forwards;
+}
+
+.search-box {
+    position: relative;
+    margin-bottom: 14px;
+}
+
+.search-box input {
+    width: 100%;
+    height: 56px;
+    border: none;
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-md), inset 0 0 0 0.5px rgba(0,0,0,0.06);
+    padding: 0 56px 0 22px;
+    font-family: var(--font);
+    font-size: 1.05rem;
+    font-weight: 400;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    outline: none;
+    transition: box-shadow 0.35s var(--ease), transform 0.35s var(--ease);
+}
+
+.search-box input::placeholder {
+    color: var(--text-tertiary);
+    font-weight: 400;
+}
+
+.search-box input:focus {
+    box-shadow: var(--shadow-lg), inset 0 0 0 0.5px rgba(0,0,0,0.06),
+                0 0 0 4px rgba(0, 113, 227, 0.15);
+    transform: scale(1.005);
+}
+
+.search-box .search-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.2s var(--spring);
+}
+
+.search-box .search-btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-50%) scale(1.06);
+}
+
+.search-box .search-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.search-box .search-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: white;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.search-box .search-btn.loading svg {
+    animation: spin 0.8s linear infinite;
+}
+
+/* Type pills */
+.type-bar {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.type-pill {
+    height: 34px;
+    padding: 0 15px;
+    border: none;
+    border-radius: 17px;
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-sm), inset 0 0 0 0.5px rgba(0,0,0,0.04);
+    font-family: var(--font);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+    letter-spacing: -0.005em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.type-pill:hover {
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md), inset 0 0 0 0.5px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+}
+
+.type-pill.active {
+    background: var(--text-primary);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.type-pill .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.4;
+}
+
+/* Auto-detected badge */
+.detected-badge {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.82rem;
+    color: var(--text-tertiary);
+    min-height: 22px;
+    transition: opacity 0.3s;
+}
+
+.detected-badge .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════
+   Progress Bar
+   ═══════════════════════════════════════════════ */
+
+.progress-section {
+    margin-top: 48px;
+    display: none;
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.progress-section.visible {
+    display: block;
+    animation: fadeUp 0.4s var(--ease) forwards;
+}
+
+.progress-track {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--indigo));
+    border-radius: 2px;
+    transition: width 0.4s var(--ease);
+}
+
+.progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.progress-label .module-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════
+   Results
+   ═══════════════════════════════════════════════ */
+
+.results-section {
+    margin-top: 48px;
+    display: none;
+}
+
+.results-section.visible {
+    display: block;
+}
+
+/* Summary Row */
+.summary-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeUp 0.5s var(--ease) forwards;
+}
+
+.summary-card {
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    padding: 18px 16px;
+    text-align: center;
+    box-shadow: var(--shadow-sm), inset 0 0 0 0.5px rgba(0,0,0,0.04);
+}
+
+.summary-card .number {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.summary-card .label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Filter pills */
+.filter-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.5s var(--ease) 0.1s forwards;
+}
+
+.filter-pill {
+    height: 30px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 15px;
+    background: transparent;
+    font-family: var(--font);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+
+.filter-pill:hover {
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+}
+
+.filter-pill.active {
+    color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+/* Module Cards */
+.module-card {
+    background: var(--bg-elevated);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm), inset 0 0 0 0.5px rgba(0,0,0,0.04);
+    margin-bottom: 14px;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.module-card.animated {
+    animation: fadeUp 0.45s var(--ease) forwards;
+}
+
+.module-header {
+    padding: 18px 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.module-header:hover {
+    background: rgba(0, 0, 0, 0.015);
+}
+
+.module-header .left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.module-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.module-header .title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.module-header .subtitle {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    margin-top: 1px;
+}
+
+.module-header .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+}
+
+.module-header .badge.has-results {
+    background: rgba(52, 199, 89, 0.1);
+    color: var(--green);
+}
+
+.module-body {
+    display: none;
+    padding: 0 22px 18px;
+}
+
+.module-card.open .module-body {
+    display: block;
+}
+
+.module-card.open .module-header .chevron {
+    transform: rotate(180deg);
+}
+
+.chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--text-tertiary);
+    transition: transform 0.25s var(--ease);
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+/* Result items */
+.result-item {
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    transition: background 0.2s;
+    position: relative;
+    padding-left: 28px;
+}
+
+.result-item:hover {
+    background: var(--bg-secondary);
+}
+
+.result-item::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: 18px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+}
+
+.result-item.found::before      { background: var(--green); }
+.result-item.warning::before    { background: var(--orange); }
+.result-item.critical::before   { background: var(--red); }
+.result-item.info::before       { background: var(--teal); }
+.result-item.not_found::before  { background: var(--bg-tertiary); }
+
+.result-item .r-title {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    margin-bottom: 3px;
+}
+
+.result-item .r-meta {
+    font-size: 0.76rem;
+    color: var(--text-tertiary);
+}
+
+.result-item .r-meta a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.result-item .r-meta a:hover {
+    text-decoration: underline;
+}
+
+.result-item .r-data {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    display: none;
+    line-height: 1.55;
+}
+
+.result-item.expanded .r-data {
+    display: block;
+}
+
+.r-data .kv {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.r-data .kv .k {
+    color: var(--text-tertiary);
+    min-width: 100px;
+    flex-shrink: 0;
+}
+
+.r-data .tag {
+    display: inline-block;
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin: 1px 2px;
+    font-size: 0.72rem;
+}
+
+/* Export Bar */
+.export-bar {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 0.5px solid var(--border);
+    opacity: 0;
+    animation: fadeUp 0.5s var(--ease) 0.3s forwards;
+}
+
+.export-btn {
+    height: 38px;
+    padding: 0 18px;
+    border: none;
+    border-radius: 19px;
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-sm), inset 0 0 0 0.5px rgba(0,0,0,0.06);
+    font-family: var(--font);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.export-btn:hover {
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+/* ═══════════════════════════════════════════════
+   Animations
+   ═══════════════════════════════════════════════ */
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ═══════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+    main { padding: 52px 16px 100px; }
+    .hero { padding: 56px 0 36px; }
+    .hero h1 { font-size: 2rem; }
+    .hero p { font-size: 1rem; }
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .type-bar { gap: 6px; }
+    .type-pill { font-size: 0.76rem; padding: 0 12px; height: 30px; }
+}
+
+/* ═══════════════════════════════════════════════
+   Utility
+   ═══════════════════════════════════════════════ */
+
+.text-green  { color: var(--green); }
+.text-red    { color: var(--red); }
+.text-orange { color: var(--orange); }
+.text-accent { color: var(--accent); }
+</style>
+</head>
+
+<body>
+
+<!-- ═══ Navbar ═══ -->
+<nav>
+    <div class="logo">
+        <div class="logo-icon">
+            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        </div>
+        OSINT Recon
+    </div>
+</nav>
+
+<main>
+
+    <!-- ═══ Hero ═══ -->
+    <section class="hero">
+        <h1>Intelligence<br><span>Gathering.</span></h1>
+        <p>Gib einen Namen, eine E-Mail, einen Username, eine Telefonnummer oder Domain ein.</p>
+    </section>
+
+    <!-- ═══ Search ═══ -->
+    <section class="search-container">
+        <div class="search-box">
+            <input
+                type="text"
+                id="searchInput"
+                placeholder="Suche nach allem..."
+                autocomplete="off"
+                spellcheck="false"
+            />
+            <button class="search-btn" id="searchBtn" onclick="startScan()">
+                <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+        </div>
+
+        <div class="type-bar">
+            <button class="type-pill active" data-type="auto" onclick="selectType(this)">
+                <span class="dot"></span>Automatisch
+            </button>
+            <button class="type-pill" data-type="username" onclick="selectType(this)">
+                <span class="dot"></span>Username
+            </button>
+            <button class="type-pill" data-type="email" onclick="selectType(this)">
+                <span class="dot"></span>E-Mail
+            </button>
+            <button class="type-pill" data-type="phone" onclick="selectType(this)">
+                <span class="dot"></span>Telefon
+            </button>
+            <button class="type-pill" data-type="domain" onclick="selectType(this)">
+                <span class="dot"></span>Domain / IP
+            </button>
+            <button class="type-pill" data-type="name" onclick="selectType(this)">
+                <span class="dot"></span>Name
+            </button>
+        </div>
+
+        <div class="detected-badge" id="detectedBadge"></div>
+    </section>
+
+    <!-- ═══ Progress ═══ -->
+    <section class="progress-section" id="progressSection">
+        <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-label">
+            <span><span class="module-name" id="progressModule">Initialisiere</span> <span id="progressMsg"></span></span>
+            <span id="progressPct">0 %</span>
+        </div>
+    </section>
+
+    <!-- ═══ Results ═══ -->
+    <section class="results-section" id="resultsSection">
+        <div class="summary-row" id="summaryRow"></div>
+        <div class="filter-row" id="filterRow"></div>
+        <div id="moduleCards"></div>
+        <div class="export-bar" id="exportBar"></div>
+    </section>
+
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════
+   State
+   ═══════════════════════════════════════════════ */
+
+let selectedType = "auto";
+let currentScanId = null;
+let pollTimer = null;
+let scanResults = null;
+
+const $ = id => document.getElementById(id);
+
+const TYPE_META = {
+    username:    { icon: "👤", bg: "rgba(88, 86, 214, 0.08)", label: "Username" },
+    email:       { icon: "✉️", bg: "rgba(0, 113, 227, 0.08)",  label: "E-Mail" },
+    phone:       { icon: "📞", bg: "rgba(52, 199, 89, 0.08)",  label: "Telefon" },
+    domain:      { icon: "🌐", bg: "rgba(90, 200, 250, 0.08)", label: "Domain/IP" },
+    ip:          { icon: "🌐", bg: "rgba(90, 200, 250, 0.08)", label: "IP-Adresse" },
+    name:        { icon: "🔎", bg: "rgba(255, 149, 0, 0.08)",  label: "Name" },
+    name_search: { icon: "🔎", bg: "rgba(255, 149, 0, 0.08)",  label: "Name" },
+};
+
+
+/* ═══════════════════════════════════════════════
+   Type Selection
+   ═══════════════════════════════════════════════ */
+
+function selectType(btn) {
+    document.querySelectorAll(".type-pill").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    selectedType = btn.dataset.type;
+    $("detectedBadge").innerHTML = "";
+}
+
+
+/* ═══════════════════════════════════════════════
+   Auto-detect on typing
+   ═══════════════════════════════════════════════ */
+
+let detectDebounce = null;
+$("searchInput").addEventListener("input", () => {
+    if (selectedType !== "auto") return;
+    clearTimeout(detectDebounce);
+    const val = $("searchInput").value.trim();
+    if (val.length < 3) {
+        $("detectedBadge").innerHTML = "";
+        return;
+    }
+    detectDebounce = setTimeout(async () => {
+        try {
+            const r = await fetch("/api/detect-type", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({input: val}),
+            });
+            const data = await r.json();
+            if (data.type) {
+                const meta = TYPE_META[data.type] || {icon:"❓", label: data.type};
+                $("detectedBadge").innerHTML =
+                    `<span class="chip">${meta.icon} Erkannt als ${meta.label}</span>`;
+            }
+        } catch(e) {}
+    }, 300);
+});
+
+$("searchInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") startScan();
+});
+
+
+/* ═══════════════════════════════════════════════
+   Start Scan
+   ═══════════════════════════════════════════════ */
+
+async function startScan() {
+    const input = $("searchInput").value.trim();
+    if (!input) return;
+
+    // Reset
+    $("resultsSection").classList.remove("visible");
+    $("progressSection").classList.add("visible");
+    $("progressFill").style.width = "0%";
+    $("progressPct").textContent = "0 %";
+    $("progressModule").textContent = "Initialisiere";
+    $("progressMsg").textContent = "";
+    $("moduleCards").innerHTML = "";
+    $("summaryRow").innerHTML = "";
+    $("filterRow").innerHTML = "";
+    $("exportBar").innerHTML = "";
+    scanResults = null;
+
+    // Button -> loading
+    const btn = $("searchBtn");
+    btn.classList.add("loading");
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+
+    const body = {input};
+    if (selectedType !== "auto") body.type = selectedType;
+
+    try {
+        const r = await fetch("/api/scan", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        currentScanId = data.scan_id;
+        pollStatus();
+    } catch(e) {
+        resetButton();
+        alert("Fehler beim Starten des Scans.");
+    }
+}
+
+
+/* ═══════════════════════════════════════════════
+   Poll Status
+   ═══════════════════════════════════════════════ */
+
+function pollStatus() {
+    if (!currentScanId) return;
+
+    pollTimer = setInterval(async () => {
+        try {
+            const r = await fetch(`/api/scan/${currentScanId}/status`);
+            const data = await r.json();
+
+            $("progressFill").style.width = data.progress + "%";
+            $("progressPct").textContent = data.progress + " %";
+            if (data.current_module) {
+                const meta = TYPE_META[data.current_module] || {};
+                $("progressModule").textContent = meta.label || data.current_module;
+            }
+            $("progressMsg").textContent = data.message || "";
+
+            if (data.status === "done") {
+                clearInterval(pollTimer);
+                scanResults = data.results;
+                renderResults(data.results, currentScanId);
+                resetButton();
+                // Smooth transition
+                setTimeout(() => {
+                    $("progressSection").classList.remove("visible");
+                }, 600);
+            } else if (data.status === "error") {
+                clearInterval(pollTimer);
+                resetButton();
+                $("progressModule").textContent = "Fehler";
+                $("progressMsg").textContent = data.message;
+            }
+        } catch(e) {}
+    }, 400);
+}
+
+
+function resetButton() {
+    const btn = $("searchBtn");
+    btn.classList.remove("loading");
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+}
+
+
+/* ═══════════════════════════════════════════════
+   Render Results
+   ═══════════════════════════════════════════════ */
+
+function renderResults(data, scanId) {
+    const s = data.summary;
+
+    // Summary
+    $("summaryRow").innerHTML = `
+        <div class="summary-card"><div class="number">${s.total_modules}</div><div class="label">Module</div></div>
+        <div class="summary-card"><div class="number">${s.total_results}</div><div class="label">Ergebnisse</div></div>
+        <div class="summary-card"><div class="number text-green">${s.total_found}</div><div class="label">Treffer</div></div>
+        <div class="summary-card"><div class="number ${s.total_errors > 0 ? 'text-red' : ''}">${s.total_errors}</div><div class="label">Fehler</div></div>
+    `;
+
+    // Filters
+    $("filterRow").innerHTML = `
+        <button class="filter-pill active" onclick="filterResults('all', this)">Alle</button>
+        <button class="filter-pill" onclick="filterResults('found', this)">Treffer</button>
+        <button class="filter-pill" onclick="filterResults('warning', this)">Warnungen</button>
+        <button class="filter-pill" onclick="filterResults('info', this)">Info</button>
+    `;
+
+    // Module cards
+    let cardsHtml = "";
+    data.modules.forEach((mod, idx) => {
+        const meta = TYPE_META[mod.module] || {icon: "📦", bg: "rgba(0,0,0,0.04)"};
+        const found = mod.summary.found;
+        const total = mod.summary.total_checks;
+
+        let resultsHtml = "";
+        (mod.results || []).forEach(r => {
+            const urlHtml = r.url
+                ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">Öffnen ↗</a>`
+                : "";
+
+            let dataHtml = "";
+            if (r.data) {
+                dataHtml = renderData(r.data);
+            }
+
+            resultsHtml += `
+                <div class="result-item ${r.severity}" data-severity="${r.severity}" onclick="this.classList.toggle('expanded')">
+                    <div class="r-title">${esc(r.title)}</div>
+                    <div class="r-meta">${esc(r.source)} · ${esc(r.category)}${urlHtml}</div>
+                    ${dataHtml ? `<div class="r-data">${dataHtml}</div>` : ""}
+                </div>
+            `;
+        });
+
+        cardsHtml += `
+            <div class="module-card animated" style="animation-delay: ${idx * 0.08}s">
+                <div class="module-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <div class="module-icon" style="background:${meta.bg}">${meta.icon}</div>
+                        <div>
+                            <div class="title">${meta.label || mod.module}</div>
+                            <div class="subtitle">${mod.summary.total_checks} geprüft · ${mod.summary.duration_seconds}s</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;">
+                        <span class="badge ${found > 0 ? 'has-results' : ''}">${found} Treffer</span>
+                        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                </div>
+                <div class="module-body">${resultsHtml}</div>
+            </div>
+        `;
+    });
+    $("moduleCards").innerHTML = cardsHtml;
+
+    // Export buttons
+    $("exportBar").innerHTML = `
+        <a class="export-btn" href="/api/scan/${scanId}/export/html" download>⬇ HTML</a>
+        <a class="export-btn" href="/api/scan/${scanId}/export/json" download>⬇ JSON</a>
+        <a class="export-btn" href="/api/scan/${scanId}/export/txt" download>⬇ TXT</a>
+    `;
+
+    // Show
+    $("resultsSection").classList.add("visible");
+
+    // Open first module with results
+    const firstWithResults = document.querySelector(".module-card .badge.has-results");
+    if (firstWithResults) {
+        firstWithResults.closest(".module-card").classList.add("open");
+    }
+}
+
+
+/* ═══════════════════════════════════════════════
+   Render Data (nested values)
+   ═══════════════════════════════════════════════ */
+
+function renderData(data) {
+    let html = "";
+    for (const [k, v] of Object.entries(data)) {
+        if (k.startsWith("_") || v === null || v === "" || v === undefined) continue;
+        if (Array.isArray(v)) {
+            if (v.length === 0) continue;
+            const items = v.slice(0, 12).map(item => {
+                if (typeof item === "object") {
+                    const parts = Object.entries(item)
+                        .filter(([,val]) => val && val !== "None" && val !== "")
+                        .map(([key, val]) => {
+                            if (key === "url" || (typeof val === "string" && val.startsWith("http")))
+                                return `<a href="${esc(String(val))}" target="_blank" rel="noopener">${esc(key)}</a>`;
+                            return `${esc(key)}: ${esc(String(val))}`;
+                        });
+                    return `<span class="tag">${parts.join(", ")}</span>`;
+                }
+                return `<span class="tag">${esc(String(item))}</span>`;
+            }).join(" ");
+            const more = v.length > 12 ? ` <em style="color:var(--text-tertiary)">+${v.length-12} weitere</em>` : "";
+            html += `<div class="kv"><span class="k">${esc(k)}</span><span>${items}${more}</span></div>`;
+        } else if (typeof v === "object") {
+            const flat = Object.entries(v)
+                .filter(([,val]) => val && val !== "None")
+                .map(([key, val]) => `${key}: ${val}`)
+                .join(", ");
+            if (flat) html += `<div class="kv"><span class="k">${esc(k)}</span><span>${esc(flat)}</span></div>`;
+        } else if (typeof v === "boolean") {
+            html += `<div class="kv"><span class="k">${esc(k)}</span><span>${v ? "✓ Ja" : "✗ Nein"}</span></div>`;
+        } else {
+            const sv = String(v);
+            if (sv.startsWith("http")) {
+                html += `<div class="kv"><span class="k">${esc(k)}</span><span><a href="${esc(sv)}" target="_blank" rel="noopener">${esc(sv)}</a></span></div>`;
+            } else {
+                html += `<div class="kv"><span class="k">${esc(k)}</span><span>${esc(sv)}</span></div>`;
+            }
+        }
+    }
+    return html;
+}
+
+
+/* ═══════════════════════════════════════════════
+   Filter
+   ═══════════════════════════════════════════════ */
+
+function filterResults(severity, btn) {
+    document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+
+    document.querySelectorAll(".result-item").forEach(el => {
+        if (severity === "all") {
+            el.style.display = "";
+        } else {
+            el.style.display = el.dataset.severity === severity ? "" : "none";
+        }
+    });
+}
+
+
+/* ═══════════════════════════════════════════════
+   Utilities
+   ═══════════════════════════════════════════════ */
+
+function esc(s) {
+    if (!s) return "";
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+}
+</script>
+
+</body>
+</html>

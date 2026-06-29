@@ -1,0 +1,14 @@
+{
+    "api_keys": {
+        "hibp": "",
+        "hunter": "",
+        "shodan": "",
+        "numverify": ""
+    },
+    "_hinweis": {
+        "hibp": "Have I Been Pwned API-Key: https://haveibeenpwned.com/API/Key",
+        "hunter": "Hunter.io API-Key: https://hunter.io/api-keys",
+        "shodan": "Shodan API-Key: https://account.shodan.io/",
+        "numverify": "NumVerify API-Key: https://numverify.com/dashboard"
+    }
+}
