@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OSINT tool runtime artifacts
+osint_tool/results/
+results/
+*.log
+
+# Local secrets — never commit real API keys
+osint_tool/config.local.json
+.env
+
+# Build artifacts
+build/
+dist/
+*.spec
