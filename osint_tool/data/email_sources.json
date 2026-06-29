@@ -1,0 +1,181 @@
+{
+  "_comment": "Holehe-Stil E-Mail-Account-Existenz-Checks + Such-/Dork-Links. account_sites: keyfreie Quellen mit KLAREM Signal (Einzelrequest). Pro Site: exists/notexists = Liste von Regeln (ANY trifft). Regeltypen: {status:[..]}, {body_equals:'..'}, {body_contains:'..'}, {json:'a.b', in:[..]}, {json:'a.b', eq:X}, {json_nonempty:'a.b'}, {all:[regel,..]} (alle muessen passen). Trifft weder exists noch notexists => INCONCLUSIVE (kein Treffer, kein sauberer Miss). Token-/CSRF-basierte Quellen (Strava/eBay/Amazon/Tumblr) sind als dedizierte zweistufige Handler im Modul email_osint.py implementiert (erst Seite holen + Token scrapen, dann pruefen) und werten ebenfalls nur das eindeutige Exists-Signal.",
+  "account_sites": [
+    {
+      "name": "Microsoft / Office 365",
+      "category": "Microsoft",
+      "method": "POST",
+      "url": "https://login.microsoftonline.com/common/GetCredentialType?mkt=en-US",
+      "content_type": "json",
+      "headers": {
+        "Content-Type": "application/json; charset=utf-8",
+        "Accept": "application/json",
+        "Origin": "https://login.microsoftonline.com",
+        "Referer": "https://login.microsoftonline.com/"
+      },
+      "body": {
+        "username": "{email}",
+        "isOtherIdpSupported": true,
+        "checkPhones": false,
+        "isRemoteNGCSupported": true,
+        "isCookieBannerShown": false,
+        "isFidoSupported": true,
+        "originalRequest": "",
+        "country": "US",
+        "forceotclogin": false,
+        "isExternalFederationDisallowed": false,
+        "isRemoteConnectSupported": false,
+        "federationFlags": 0,
+        "isSignup": false,
+        "flowToken": "",
+        "isAccessPassSupported": true
+      },
+      "exists": [{"json": "IfExistsResult", "in": [0, 5, 6]}],
+      "notexists": [{"json": "IfExistsResult", "in": [1]}],
+      "extract": ["IfExistsResult", "ThrottleStatus", "IsUnmanaged"],
+      "reliability": "high",
+      "notes": "Microsoft Credential-Type-Enumeration. IfExistsResult 0/5/6 = Konto existiert (5/6 = foederiert), 1 = existiert nicht, 2 = throttled (unklar). Funktioniert fuer Consumer- und Azure-AD/M365-Konten."
+    },
+    {
+      "name": "Spotify",
+      "category": "Music",
+      "method": "GET",
+      "url": "https://spclient.wg.spotify.com/signup/public/v1/account?validate=1&email={emaillower}&country=US",
+      "content_type": "none",
+      "headers": {"Accept": "application/json"},
+      "exists": [{"json": "status", "in": [20]}],
+      "notexists": [{"json": "status", "in": [1]}],
+      "reliability": "medium",
+      "notes": "Signup-Validate-Endpoint: status 20 = E-Mail bereits registriert, 1 = verfuegbar."
+    },
+    {
+      "name": "Any.do",
+      "category": "Productivity",
+      "method": "POST",
+      "url": "https://sm-prod2.any.do/check_email",
+      "content_type": "json",
+      "headers": {
+        "Accept": "*/*",
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Platform": "3",
+        "Origin": "https://desktop.any.do",
+        "Referer": "https://desktop.any.do/"
+      },
+      "body": {"email": "{email}"},
+      "exists": [{"all": [{"status": [200]}, {"json": "user_exists", "eq": true}]}],
+      "notexists": [{"all": [{"status": [200]}, {"json": "user_exists", "eq": false}]}],
+      "reliability": "high"
+    },
+    {
+      "name": "Plurk",
+      "category": "Social Media",
+      "method": "POST",
+      "url": "https://www.plurk.com/Users/isEmailFound",
+      "content_type": "form",
+      "headers": {
+        "Accept": "*/*",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://www.plurk.com"
+      },
+      "body": "email={email}",
+      "exists": [{"body_equals": "true"}],
+      "notexists": [{"body_equals": "false"}],
+      "reliability": "high"
+    },
+    {
+      "name": "Twitter / X",
+      "category": "Social Media",
+      "method": "GET",
+      "url": "https://api.twitter.com/i/users/email_available.json?email={email}",
+      "content_type": "none",
+      "headers": {"Accept": "application/json"},
+      "exists": [{"json": "taken", "eq": true}],
+      "notexists": [{"json": "taken", "eq": false}],
+      "reliability": "low",
+      "notes": "Legacy-Endpoint, von X oft geblockt (403) -> dann INCONCLUSIVE."
+    },
+    {
+      "name": "mail.ru",
+      "category": "Email Provider",
+      "method": "POST",
+      "url": "https://account.mail.ru/api/v1/user/password/restore",
+      "content_type": "form",
+      "headers": {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Origin": "https://account.mail.ru",
+        "Referer": "https://account.mail.ru/recovery"
+      },
+      "body": "email={emaillower}&htmlencoded=false",
+      "exists": [{"all": [{"status": [200]}, {"json": "status", "eq": 200}]}],
+      "notexists": [],
+      "reliability": "medium"
+    },
+    {
+      "name": "Rambler",
+      "category": "Email Provider",
+      "method": "POST",
+      "url": "https://id.rambler.ru/jsonrpc",
+      "content_type": "json",
+      "headers": {
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "Origin": "https://id.rambler.ru",
+        "Referer": "https://id.rambler.ru/champ/registration"
+      },
+      "body": {"method": "Rambler::Id::get_email_account_info", "params": [{"email": "{email}"}], "rpc": "2.0"},
+      "exists": [{"json": "result.result.exists", "in": [1]}],
+      "notexists": [{"json": "result.result.exists", "in": [0]}],
+      "reliability": "medium"
+    },
+    {
+      "name": "Flickr",
+      "category": "Photo",
+      "method": "GET",
+      "url": "https://identity-api.flickr.com/migration?email={email}",
+      "content_type": "none",
+      "headers": {
+        "Accept": "*/*",
+        "Referer": "https://identity.flickr.com/login",
+        "Origin": "https://identity.flickr.com"
+      },
+      "exists": [{"json": "state_code", "eq": "5"}],
+      "notexists": [],
+      "reliability": "medium",
+      "notes": "Flickr/Yahoo-Identitaet: state_code 5 = vorhanden."
+    },
+    {
+      "name": "Nimble",
+      "category": "CRM",
+      "method": "GET",
+      "url": "https://www.nimble.com/lib/register.php?email={email}",
+      "content_type": "none",
+      "headers": {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": "https://www.nimble.com/"
+      },
+      "exists": [{"body_contains": "already registered"}],
+      "notexists": [{"body_equals": "true"}],
+      "reliability": "medium"
+    }
+  ],
+  "dorks": [
+    {"name": "Google — exakte E-Mail", "category": "Suchmaschine", "url": "https://www.google.com/search?q=%22{email}%22"},
+    {"name": "Google — Local-Part als Username", "category": "Suchmaschine", "url": "https://www.google.com/search?q=%22{local}%22"},
+    {"name": "Google — E-Mail auf Paste-Seiten", "category": "Paste-Sites", "url": "https://www.google.com/search?q=%22{email}%22+(site%3Apastebin.com+OR+site%3Aghostbin.com+OR+site%3Athrowbin.io+OR+site%3Acontrolc.com)"},
+    {"name": "Bing — exakte E-Mail", "category": "Suchmaschine", "url": "https://www.bing.com/search?q=%22{email}%22"},
+    {"name": "DuckDuckGo — exakte E-Mail", "category": "Suchmaschine", "url": "https://duckduckgo.com/?q=%22{email}%22"},
+    {"name": "ThatsThem — E-Mail-Lookup", "category": "People Search", "url": "https://thatsthem.com/email/{email}"},
+    {"name": "Spokeo — E-Mail-Suche", "category": "People Search", "url": "https://www.spokeo.com/email-search/{email}"},
+    {"name": "Epieos — E-Mail-Lookup", "category": "OSINT", "url": "https://epieos.com/?q={email}&t=email"},
+    {"name": "IntelligenceX — Suche", "category": "OSINT", "url": "https://intelx.io/?s={email}"},
+    {"name": "Have I Been Pwned — Web-UI", "category": "Breach", "url": "https://haveibeenpwned.com/account/{email}"},
+    {"name": "DeHashed — Web-UI", "category": "Breach", "url": "https://dehashed.com/search?query={email}"},
+    {"name": "Mozilla Monitor", "category": "Breach", "url": "https://monitor.mozilla.org/"},
+    {"name": "Facebook — E-Mail-Suche", "category": "Social Media", "url": "https://www.facebook.com/search/top/?q={email}"},
+    {"name": "LinkedIn — E-Mail/Name-Suche", "category": "Professional", "url": "https://www.linkedin.com/search/results/all/?keywords={email}"}
+  ]
+}

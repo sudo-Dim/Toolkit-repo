@@ -1,0 +1,36 @@
+{
+  "_comment": "Kopiere diese Datei nach 'config.local.json' und trage echte Keys/Logins ein. config.local.json ist via .gitignore vom Repo ausgeschlossen und wird automatisch geladen (ueberschreibt config.json).",
+
+  "api_keys": {
+    "hibp": "dein-haveibeenpwned-key",
+    "hunter": "dein-hunter-key",
+    "emailrep": "optional-emailrep-key",
+    "dehashed_email": "deine-dehashed-account-mail",
+    "dehashed": "dein-dehashed-api-key",
+    "leakcheck": "dein-leakcheck-pro-key",
+    "github": "ghp_dein_github_token"
+  },
+
+  "_site_auth_hinweis": [
+    "Fuer Seiten, die anonym/aus Datacenter-IPs nicht zuverlaessig geprueft werden koennen",
+    "(Instagram, X/Twitter, LinkedIn, Reddit, TikTok, Snapchat, Kick ...), kannst du ein",
+    "eigenes Login hinterlegen. Dann prueft das Username-Modul diese Seiten MIT deinem Login,",
+    "statt sie nur als manuellen Link auszugeben.",
+    "",
+    "So kommst du an die Werte (im eingeloggten Browser, DevTools -> Application/Network):",
+    "  cookie  : der komplette Cookie-Header deiner eingeloggten Session (Application -> Cookies)",
+    "  bearer  : ein Bearer-Token aus einem API-Request (Network -> Request Headers: Authorization)",
+    "  headers : beliebige zusaetzliche Header als Objekt",
+    "Der Plattformname muss EXAKT (case-insensitive) dem Namen im Tool entsprechen,",
+    "z.B. 'Instagram', 'Twitter/X', 'LinkedIn', 'Reddit', 'TikTok'.",
+    "ACHTUNG: Diese Cookies sind so wertvoll wie dein Passwort. Niemals committen/teilen."
+  ],
+
+  "site_auth": {
+    "Instagram": { "cookie": "sessionid=DEINE_SESSION; csrftoken=DEIN_CSRF; ds_user_id=12345" },
+    "Twitter/X": { "headers": { "Cookie": "auth_token=...; ct0=...", "x-csrf-token": "..." } },
+    "Reddit":    { "bearer": "DEIN_OAUTH_BEARER_TOKEN" },
+    "LinkedIn":  { "cookie": "li_at=DEIN_LI_AT_COOKIE" },
+    "TikTok":    { "cookie": "sessionid=..." }
+  }
+}

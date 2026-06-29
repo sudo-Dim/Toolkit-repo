@@ -1,0 +1,26 @@
+{
+  "_comment": "Teilmenge gaengiger Wegwerf-/Temporaer-Mail-Domains. Nicht vollstaendig — fuer eine vollstaendige Liste siehe github.com/disposable-email-domains/disposable-email-domains.",
+  "domains": [
+    "mailinator.com", "guerrillamail.com", "guerrillamail.info", "guerrillamail.biz",
+    "guerrillamail.de", "guerrillamail.net", "guerrillamail.org", "sharklasers.com",
+    "grr.la", "10minutemail.com", "10minutemail.net", "20minutemail.com",
+    "tempmail.com", "temp-mail.org", "tempmailo.com", "tempmail.net", "tempr.email",
+    "throwawaymail.com", "throwawaymailgenerator.com", "trashmail.com", "trashmail.de",
+    "trash-mail.com", "trashmail.net", "getnada.com", "nada.email", "dispostable.com",
+    "yopmail.com", "yopmail.fr", "yopmail.net", "cool.fr.nf", "jetable.fr.nf",
+    "maildrop.cc", "mailnesia.com", "mintemail.com", "spamgourmet.com", "mytemp.email",
+    "fakeinbox.com", "fakemail.net", "tempinbox.com", "emailondeck.com", "mohmal.com",
+    "moakt.com", "tempmailaddress.com", "luxusmail.org", "inboxkitten.com",
+    "burnermail.io", "33mail.com", "anonaddy.com", "anonaddy.me", "mailsac.com",
+    "spam4.me", "wegwerfmail.de", "wegwerfmail.net", "wegwerfmail.org",
+    "discard.email", "discardmail.com", "discardmail.de", "einrot.com",
+    "fleckmail.de", "muellmail.com", "byom.de", "kurzepost.de", "objectmail.com",
+    "proxymail.eu", "rcpt.at", "trash-mail.at", "wegwerfemail.de", "0815.ru",
+    "0clickemail.com", "1usemail.com", "20email.eu", "emailfake.com", "mailcatch.com",
+    "mailexpire.com", "mailforspam.com", "mailtemp.info", "mailtothis.com",
+    "noclickemail.com", "sogetthis.com", "spambog.com", "spambox.us", "spamfree24.org",
+    "tempemail.net", "tempomail.fr", "temporaryemail.net", "temporaryinbox.com",
+    "thankyou2010.com", "tmail.ws", "tmailinator.com", "willhackforfood.biz",
+    "yourdomain.com", "zoemail.org", "fake-box.com", "tmpmail.org", "tmpmail.net"
+  ]
+}

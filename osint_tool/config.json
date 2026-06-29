@@ -2,13 +2,27 @@
     "api_keys": {
         "hibp": "",
         "hunter": "",
+        "emailrep": "",
+        "dehashed_email": "",
+        "dehashed": "",
+        "intelx": "",
+        "leakcheck": "",
+        "github": "",
         "shodan": "",
         "numverify": ""
     },
+    "site_auth": {},
     "_hinweis": {
-        "hibp": "Have I Been Pwned API-Key: https://haveibeenpwned.com/API/Key",
-        "hunter": "Hunter.io API-Key: https://hunter.io/api-keys",
-        "shodan": "Shodan API-Key: https://account.shodan.io/",
-        "numverify": "NumVerify API-Key: https://numverify.com/dashboard"
+        "allgemein": "Echte Keys/Logins bitte NICHT hier, sondern in config.local.json eintragen (ist via .gitignore ausgeschlossen). Siehe config.local.example.json.",
+        "hibp": "Have I Been Pwned API-Key (E-Mail-Breaches): https://haveibeenpwned.com/API/Key",
+        "hunter": "Hunter.io API-Key (E-Mail-Verifikation): https://hunter.io/api-keys",
+        "emailrep": "EmailRep.io API-Key (optional, hoeheres Limit): https://emailrep.io/key",
+        "dehashed": "DeHashed: dehashed_email = Account-E-Mail, dehashed = API-Key. https://dehashed.com",
+        "intelx": "IntelligenceX API-Key: https://intelx.io",
+        "leakcheck": "LeakCheck PRO API-Key: https://leakcheck.io",
+        "github": "GitHub Personal Access Token (hebt das Rate-Limit der Commit-/User-Suche an).",
+        "shodan": "Shodan API-Key (IP/Port-Scans): https://account.shodan.io/",
+        "numverify": "NumVerify API-Key (Telefon): https://numverify.com/dashboard",
+        "site_auth": "Logins fuer Seiten, die anonym nicht geprueft werden koennen (Instagram, X, LinkedIn, Reddit, TikTok). Format siehe config.local.example.json. Ist ein Login hinterlegt, wird die Seite geprueft statt nur verlinkt."
     }
 }
