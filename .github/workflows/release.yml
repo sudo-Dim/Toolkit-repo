@@ -1,0 +1,59 @@
+name: Build & publish osint_tool.zip
+
+# Baut bei jeder Änderung am Tool auf 'main' automatisch die osint_tool.zip
+# und ersetzt das Release-Asset im Release 'v0.8-alpha'. Dadurch bleibt die
+# Download-URL .../releases/download/v0.8-alpha/osint_tool.zip identisch und
+# die Website bekommt automatisch die neue Version.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'osint_tool/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:        # erlaubt manuelles Auslösen im Actions-Tab
+
+permissions:
+  contents: write           # nötig, um Release-Assets zu schreiben
+
+concurrency:
+  group: publish-osint-zip
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build osint_tool.zip
+        run: |
+          # Laufzeit-/Cache-/Secret-Artefakte sicher ausschließen
+          rm -rf osint_tool/results osint_tool/config.local.json
+          find osint_tool -name '__pycache__' -type d -prune -exec rm -rf {} + || true
+          zip -rq osint_tool.zip osint_tool \
+            -x '*/__pycache__/*' -x '*.pyc' -x '*/results/*' -x 'osint_tool/config.local.json'
+          echo "Inhalt:" && unzip -l osint_tool.zip | tail -6
+
+      - name: Smoke-Test (Import aus frischer Entpackung)
+        run: |
+          mkdir -p _verify && (cd _verify && unzip -q ../osint_tool.zip)
+          python -c "import sys; sys.path.insert(0,'_verify'); \
+            from osint_tool.core.engine import OSINTEngine; \
+            e=OSINTEngine(); print('Module:', list(e.available_modules))"
+
+      - name: Upload/ersetze Asset im Release v0.8-alpha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Release anlegen, falls es (noch) nicht existiert
+          if ! gh release view v0.8-alpha >/dev/null 2>&1; then
+            gh release create v0.8-alpha \
+              --title "OSINT Tool" \
+              --notes "Automatisch gebautes Release der aktuellen OSINT-Tool-Version." \
+              --target main
+          fi
+          # --clobber überschreibt das gleichnamige Asset -> URL bleibt identisch
+          gh release upload v0.8-alpha osint_tool.zip --clobber
+          echo "✅ osint_tool.zip im Release v0.8-alpha aktualisiert."
