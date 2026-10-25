@@ -29,8 +29,9 @@ try {
             } finally { $gzip.Dispose(); $stream.Dispose() }
             $compilerArguments += '/resource:' + $compressed + ',' + $file
         }
-        & $compiler @args (Join-Path $PSScriptRoot 'Launcher.cs')
+        & $compiler @compilerArguments (Join-Path $PSScriptRoot 'Launcher.cs')
         if ($LASTEXITCODE -ne 0) { throw "Compiler failed: $name" }
+        if (-not (Test-Path -LiteralPath (Join-Path $output "$name.exe"))) { throw "Compiler produced no executable: $name" }
         Compress-Archive -LiteralPath (Join-Path $output "$name.exe") -DestinationPath (Join-Path $output "$name-windows-x64.zip") -Force
         $artifacts.Add([pscustomobject]@{
             Name="$name.exe"; Bytes=(Get-Item (Join-Path $output "$name.exe")).Length
