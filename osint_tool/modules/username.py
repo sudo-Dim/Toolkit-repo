@@ -5,7 +5,7 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
 from ..core.http import build_session, DEFAULT_UA
@@ -69,6 +69,11 @@ class UsernameModule(BaseModule):
 
         # Hinterlegtes Login anwenden (ermöglicht Prüfung sonst gesperrter Seiten)
         auth = self.config.get_site_auth(name) if self.config else None
+        profile_origin, probe_origin = urlsplit(profile_url), urlsplit(probe_url)
+        if (profile_origin.scheme, profile_origin.netloc.casefold()) != (probe_origin.scheme, probe_origin.netloc.casefold()):
+            # A profile cookie must not migrate to a newly introduced API host.
+            # API-specific tokens (currently GitHub) are configured separately above.
+            auth = None
         if auth:
             if auth.get("cookie"):
                 headers["Cookie"] = auth["cookie"]

@@ -132,6 +132,16 @@ class ProfileEvidenceTests(unittest.TestCase):
         self.assertEqual(report.results[0].data['verdict'], 'manual')
         session.return_value.get.assert_not_called()
 
+    def test_profile_credentials_are_not_sent_to_a_different_api_origin(self):
+        module = UsernameModule(AppConfig(api_keys={'github': 'api-token'},
+            site_auth={'GitHub': {'cookie': 'private-profile-session', 'bearer': 'profile-token'}}))
+        session = Mock()
+        session.get.return_value = response('https://api.github.com/users/alice', '{"login":"alice","id":123}')
+        self.assertEqual(module._check_platform(SOURCES['GitHub'], 'alice', session)['verdict'], 'found')
+        headers = session.get.call_args.kwargs['headers']
+        self.assertNotIn('Cookie', headers)
+        self.assertEqual(headers['Authorization'], 'Bearer api-token')
+
 
 class AccountEvidenceTests(unittest.TestCase):
     def setUp(self):
