@@ -44,14 +44,14 @@ def url_key(url):
             unquote(parsed.path).rstrip('/'), parsed.query)
 
 
-def response_problem(status, text, final_url, expected_url=None):
+def response_problem(status, text, final_url, expected_url=None, *, page=None):
     if status in (401, 403, 407, 408, 425, 429, 451) or status >= 500:
         return f'Quelle nicht auswertbar (HTTP {status})'
     path = urlsplit(final_url).path.lower()
     if re.search(r'/(?:login|log-in|signin|sign-in|auth|captcha|challenge|consent)(?:/|$)', path):
         return 'Login-, Consent- oder Sicherheitsprüfung statt Profil'
-    if '<' in text[:1000]:
-        page = PageMetadata(text)
+    if page is not None or text.lstrip('\ufeff \t\r\n').startswith('<'):
+        page = page if page is not None else PageMetadata(text)
         title = page.title.strip().casefold()
         if page.challenge or re.search(r'just a moment|access denied|attention required|verify (?:you|your)|checking your browser|sign in|log in|service unavailable', title):
             return 'Sperr-, Login- oder Fehlerseite statt auswertbarer Antwort'
@@ -78,16 +78,16 @@ def profile_evidence(platform, status, text, final_url, username):
     """Return verdict, reason. HTML 'candidate' requires a separate negative control."""
     encoded = quote(username, safe='')
     probe = platform.get('url_probe', platform['url']).replace('{}', encoded)
-    problem = response_problem(status, text, final_url)
+    page = PageMetadata(text) if text.lstrip('\ufeff \t\r\n').startswith('<') else None
+    problem = response_problem(status, text, final_url, page=page)
     if problem:
         return 'uncertain', problem
     if status in (404, 410):
         return 'not_found', f'Quelle meldet HTTP {status}; kein öffentliches Profil'
     if status != 200:
         return 'uncertain', f'Keine verwertbare Antwort (HTTP {status})'
-    problem = response_problem(status, text, final_url, probe)
-    if problem:
-        return 'uncertain', problem
+    if url_key(final_url) != url_key(probe):
+        return 'uncertain', 'Weiterleitung auf eine andere Seite; Profilzuordnung nicht belegt'
     spec = platform.get('evidence') or {}
     if spec.get('kind') == 'json':
         try:
@@ -115,7 +115,8 @@ def profile_evidence(platform, status, text, final_url, username):
         return 'uncertain', 'Keine verlässliche automatische Profilregel für diese Quelle'
     if any(message.casefold() in text.casefold() for message in platform.get('error_msg', []) if message):
         return 'not_found', 'Quelle liefert ihr bekanntes Nicht-gefunden-Signal'
-    page = PageMetadata(text)
+    if page is None:
+        return 'uncertain', 'Erwartete Profilseite liefert kein HTML'
     if re.search(r'(?:page|user|profile|account) (?:not found|does not exist)|\b404\s*[-:–]?\s*(?:not found|page not found)|seite nicht gefunden|profil nicht gefunden', page.title, re.I):
         return 'not_found', 'Seite kennzeichnet das Profil ausdrücklich als fehlend'
     expected_url = platform['url'].replace('{}', encoded)
