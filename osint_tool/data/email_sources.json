@@ -1,5 +1,5 @@
 {
-  "_comment": "Holehe-Stil E-Mail-Account-Existenz-Checks + Such-/Dork-Links. account_sites: keyfreie Quellen mit KLAREM Signal (Einzelrequest). Pro Site: exists/notexists = Liste von Regeln (ANY trifft). Regeltypen: {status:[..]}, {body_equals:'..'}, {body_contains:'..'}, {json:'a.b', in:[..]}, {json:'a.b', eq:X}, {json_nonempty:'a.b'}, {all:[regel,..]} (alle muessen passen). Trifft weder exists noch notexists => INCONCLUSIVE (kein Treffer, kein sauberer Miss). Token-/CSRF-basierte Quellen (Strava/eBay/Amazon/Tumblr) sind als dedizierte zweistufige Handler im Modul email_osint.py implementiert (erst Seite holen + Token scrapen, dann pruefen) und werten ebenfalls nur das eindeutige Exists-Signal.",
+  "_comment": "E-Mail-Anbietersignale: explizite Regeln mit Typprüfung; HTTP-Fehler, widersprüchliche Signale und Weiterleitungen bleiben unklar. Microsoft/Federation nur Hinweis. Kein Identitätsnachweis.",
   "account_sites": [
     {
       "name": "Microsoft / Office 365",
@@ -32,29 +32,27 @@
       },
       "exists": [
         {
-          "json": "IfExistsResult",
-          "in": [
-            0,
-            5,
-            6
+          "all": [
+            {
+              "json": "IfExistsResult",
+              "eq": 0
+            },
+            {
+              "json": "ThrottleStatus",
+              "eq": 0
+            }
           ]
         }
       ],
-      "notexists": [
-        {
-          "json": "IfExistsResult",
-          "in": [
-            1
-          ]
-        }
-      ],
+      "notexists": [],
       "extract": [
         "IfExistsResult",
         "ThrottleStatus",
         "IsUnmanaged"
       ],
       "reliability": "high",
-      "notes": "Microsoft Credential-Type-Enumeration. IfExistsResult 0/5/6 = Konto existiert (5/6 = foederiert), 1 = existiert nicht, 2 = throttled (unklar). Funktioniert fuer Consumer- und Azure-AD/M365-Konten."
+      "notes": "Credential-Type/Federation und Catch-all-Domains erlauben keine sichere Kontozuordnung. Nur Hinweis bei ungedrosselter Antwort; 5/6 bleiben unklar.",
+      "hint_only": true
     },
     {
       "name": "Spotify",

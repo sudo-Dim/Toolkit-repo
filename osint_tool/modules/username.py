@@ -1,20 +1,7 @@
-"""
-OSINT Tool - Username-Modul (v2)
-Prüft, ob ein Username auf vielen Plattformen existiert — mit dem
-Sherlock/Maigret-Detektionsmodell statt naivem "HTTP 200 == gefunden".
-
-Pro Plattform ein präzises Nicht-gefunden-Signal:
-  • status_code : Nicht-gefunden-Codes (meist 404)
-  • message     : bestimmte Textbausteine im Body bedeuten "nicht gefunden"
-  • response_url: Redirect auf ein bestimmtes Ziel bedeutet "nicht gefunden"
-
-Seiten, die anonym/aus Datacenter-IPs nicht zuverlässig prüfbar sind
-(Instagram, X, TikTok, LinkedIn, StackOverflow …), werden NICHT geraten,
-sondern nur als manueller Link ausgegeben (severity INFO). Damit verschwinden
-die früheren False Positives (z.B. StackOverflow-/users-Suchseite == 200).
-"""
+"""Username lookup with exact API evidence and negative controls for HTML profiles."""
 
 import re
+import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
@@ -22,6 +9,7 @@ from urllib.parse import quote
 
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
 from ..core.http import build_session, DEFAULT_UA
+from ..core.evidence import profile_evidence
 from ..core.config import USERNAME_PLATFORMS
 
 
@@ -33,8 +21,7 @@ class UsernameModule(BaseModule):
 
     @property
     def description(self) -> str:
-        return ("Prüft Username-Existenz auf vielen Plattformen (präzise "
-                "Detektion, keine False Positives)")
+        return ("Prüft öffentliche Profile mit Belegen; unklare Quellen bleiben unbestätigt")
 
     @property
     def input_types(self) -> List[str]:
@@ -44,42 +31,30 @@ class UsernameModule(BaseModule):
         ua = self.config.user_agent if self.config else DEFAULT_UA
         return build_session(user_agent=ua)
 
-    # ── Detektionslogik ────────────────────────────────────────
     @staticmethod
-    def _verdict(platform: dict, status: int, text: str, final_url: str,
-                 username: str) -> str:
-        """Gibt 'found' | 'not_found' | 'uncertain' zurück."""
-        etype = platform.get("error_type", "status_code")
+    def _verdict(platform, status, text, final_url, username):
+        verdict, _ = profile_evidence(platform, status, text, final_url, username)
+        return 'uncertain' if verdict == 'candidate' else verdict
 
-        if etype == "status_code":
-            codes = platform.get("error_code") or [404]
-            if status in codes:
-                return "not_found"
-            if 200 <= status < 300:
-                return "found"
-            return "uncertain"
+    @staticmethod
+    def _read_response(session, url, headers, timeout):
+        # Bound untrusted pages; retain pooling by consuming/closing each response.
+        with session.get(url, headers=headers, timeout=timeout, allow_redirects=True, stream=True) as response:
+            body = bytearray()
+            for chunk in response.iter_content(16384):
+                body.extend(chunk)
+                if len(body) > 2 * 1024 * 1024:
+                    raise ValueError('Antwort überschreitet 2 MiB; nicht sicher auswertbar')
+            encoding = response.encoding or 'utf-8'
+            return response.status_code, bytes(body).decode(encoding, errors='replace'), str(response.url)
 
-        if etype == "message":
-            msgs = platform.get("error_msg") or []
-            if any(m and m in text for m in msgs):
-                return "not_found"
-            if status == 200:
-                return "found"
-            if status in (404, 410):
-                return "not_found"
-            return "uncertain"
-
-        if etype == "response_url":
-            err = (platform.get("error_url") or "").replace("{}", username)
-            if err and (final_url == err or final_url.startswith(err) or err in final_url):
-                return "not_found"
-            if 200 <= status < 300:
-                return "found"
-            if status in (404, 410):
-                return "not_found"
-            return "uncertain"
-
-        return "uncertain"
+    @staticmethod
+    def _control_username(platform):
+        pattern = platform.get('regex_check')
+        for candidate in ('osint' + secrets.token_hex(6), 'o' + secrets.token_hex(4)):
+            if not pattern or re.fullmatch(pattern, candidate):
+                return candidate
+        return None
 
     def _check_platform(self, platform: dict, username: str, session) -> dict:
         name = platform["name"]
@@ -87,9 +62,10 @@ class UsernameModule(BaseModule):
         encoded = quote(username, safe="")
         profile_url = platform["url"].replace("{}", encoded)
         probe_url = platform.get("url_probe", platform["url"]).replace("{}", encoded)
-        method = platform.get("request_method", "GET").upper()
         headers = dict(platform.get("request_headers") or {})
         headers.setdefault("User-Agent", self.config.user_agent if self.config else DEFAULT_UA)
+        if name == 'GitHub' and self.config and self.config.get_api_key('github'):
+            headers['Authorization'] = f"Bearer {self.config.get_api_key('github')}"
 
         # Hinterlegtes Login anwenden (ermöglicht Prüfung sonst gesperrter Seiten)
         auth = self.config.get_site_auth(name) if self.config else None
@@ -106,16 +82,24 @@ class UsernameModule(BaseModule):
                 "authed": bool(auth)}
         try:
             timeout = self.config.request_timeout if self.config else 12
-            if method == "HEAD":
-                resp = session.head(probe_url, headers=headers, timeout=timeout, allow_redirects=True)
-                text = ""
-            else:
-                resp = session.get(probe_url, headers=headers, timeout=timeout, allow_redirects=True)
-                text = resp.text if resp.text else ""
-            verdict = self._verdict(platform, resp.status_code, text, str(resp.url), username)
-            base.update({"verdict": verdict, "status_code": resp.status_code})
+            status, text, final_url = self._read_response(session, probe_url, headers, timeout)
+            verdict, reason = profile_evidence(platform, status, text, final_url, username)
+            if verdict == 'candidate':
+                control = self._control_username(platform)
+                if control:
+                    control_url = platform.get('url_probe', platform['url']).replace('{}', quote(control, safe=''))
+                    control_response = self._read_response(session, control_url, headers, timeout)
+                    control_verdict, _ = profile_evidence(platform, *control_response, control)
+                    if control_verdict == 'not_found':
+                        verdict, reason = 'found', 'Exakte Profil-Metadaten; zufälliger Kontrollname wird als fehlend erkannt'
+                    else:
+                        verdict, reason = 'uncertain', 'Gegenprobe nicht eindeutig: mögliche Soft-404-/Sperrseite'
+                else:
+                    verdict, reason = 'uncertain', 'Keine syntaktisch gültige Gegenprobe möglich'
+            base.update({'verdict': verdict, 'status_code': status, 'reason': reason,
+                         'checked_url': probe_url, 'final_url': final_url})
         except Exception as exc:
-            base.update({"verdict": "uncertain", "error": str(exc)})
+            base.update({"verdict": "uncertain", "error": self.redact(str(exc)), "reason": "Anfrage fehlgeschlagen; kein Existenzurteil"})
         return base
 
     # ── Hauptlauf ──────────────────────────────────────────────
@@ -131,12 +115,12 @@ class UsernameModule(BaseModule):
             rgx = p.get("regex_check")
             if rgx:
                 try:
-                    if not re.search(rgx, username):
+                    if not re.fullmatch(rgx, username):
                         continue  # Username für diese Plattform syntaktisch unmöglich
                 except re.error:
                     pass
             has_auth = bool(self.config and self.config.get_site_auth(p["name"]))
-            if p.get("anonymous_checkable", True) or probe_unreliable or has_auth:
+            if p.get("evidence") and (p.get("anonymous_checkable", True) or probe_unreliable or has_auth):
                 checkable.append(p)
             else:
                 link_only.append(p)
@@ -153,7 +137,7 @@ class UsernameModule(BaseModule):
                 severity=ResultSeverity.INFO,
                 title=f"{p['name']}: nur manuell prüfbar (anonym nicht zuverlässig)",
                 data={"reason": p.get("notes", "Seite blockt automatisierte Prüfung / benötigt Login."),
-                      "manual_check": True},
+                      "manual_check": True, "verdict": "manual"},
                 url=p["url"].replace("{}", quote(username, safe=""))))
             self.report_progress(done, total, f"{p['name']} (nur Link)")
 
@@ -175,24 +159,30 @@ class UsernameModule(BaseModule):
                     if verdict == "found":
                         self.add_result(OSINTResult(
                             source=info["name"], module=self.name, category=info["category"],
-                            severity=ResultSeverity.FOUND, title=f"Gefunden auf {info['name']}",
+                            severity=ResultSeverity.FOUND, title=f"Öffentliches Profil auf {info['name']} belegt",
                             data={"exists": True, "status_code": info.get("status_code"),
                                   "reliability": info.get("reliability"),
+                                  "reason": info.get("reason"), "checked_url": info.get("checked_url"),
+                                  "identity_verified": False, "verdict": "found",
+                                  "note": "Gleicher Username belegt nicht dieselbe Person.",
                                   **({"via_login": True} if info.get("authed") else {})},
                             url=info["profile_url"]))
                     elif verdict == "not_found":
                         self.add_result(OSINTResult(
                             source=info["name"], module=self.name, category=info["category"],
                             severity=ResultSeverity.NOT_FOUND, title=f"Nicht gefunden auf {info['name']}",
-                            data={"exists": False, "status_code": info.get("status_code")}))
+                            data={"exists": False, "status_code": info.get("status_code"),
+                                  "verdict": "not_found", "reason": info.get("reason")}))
                     else:  # uncertain
                         self.add_result(OSINTResult(
                             source=info["name"], module=self.name, category=info["category"],
                             severity=ResultSeverity.INFO,
-                            title=f"Unklar bei {info['name']} (blockiert/Rate-Limit)",
+                            title=f"Unbestätigt bei {info['name']}",
                             data={"exists": None, "status_code": info.get("status_code"),
-                                  "error": info.get("error")},
+                                  "error": info.get("error"), "reason": info.get("reason"),
+                                  "verdict": "uncertain"},
                             url=info["profile_url"]))
                     self.report_progress(done, total, f"{info.get('name', '?')} geprüft")
 
+        session.close()
         return self.create_report(username, input_type, start, time.time())

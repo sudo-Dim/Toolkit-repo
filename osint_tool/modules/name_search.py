@@ -150,14 +150,16 @@ class NameModule(BaseModule):
         if orcid:
             self.add_result(OSINTResult(
                 source="ORCID", module=self.name, category="Akademisch",
-                severity=ResultSeverity.FOUND, title=f"{len(orcid)} ORCID-Treffer",
-                data={"researchers": orcid}, url=orcid[0]["url"]))
+                severity=ResultSeverity.INFO, title=f"{len(orcid)} ORCID-Namenskandidaten — Identität offen",
+                data={"researchers": orcid, "verdict": "candidate", "identity_verified": False,
+                      "reason": "Namensähnlichkeit allein belegt keine Personenidentität."}, url=orcid[0]["url"]))
         gh = self._github_users(name, session)
         if gh:
             self.add_result(OSINTResult(
                 source="GitHub", module=self.name, category="Development",
-                severity=ResultSeverity.FOUND, title=f"{len(gh)} GitHub-User (Namenstreffer)",
-                data={"users": gh}, url=gh[0]["url"]))
+                severity=ResultSeverity.INFO, title=f"{len(gh)} GitHub-Namenskandidaten — Identität offen",
+                data={"users": gh, "verdict": "candidate", "identity_verified": False,
+                      "reason": "Suchergebnisse können Namensvetter oder ungenaue Treffer enthalten."}, url=gh[0]["url"]))
         tick("ORCID & GitHub geprüft")
 
         # 3. Klickbare Such-/Register-Links (einzeln, gruppiert)
@@ -166,7 +168,7 @@ class NameModule(BaseModule):
             self.add_result(OSINTResult(
                 source=lk["name"], module=self.name,
                 category=f"Link · {lk.get('category', '')}".strip(" ·"),
-                severity=ResultSeverity.INFO, title=lk["name"], data={},
+                severity=ResultSeverity.INFO, title=lk["name"], data={"manual_check": True, "verdict": "manual"},
                 url=self._tmpl(lk["url"], tokens)))
         tick("Suchlinks generiert")
 

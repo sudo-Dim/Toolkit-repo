@@ -42,7 +42,7 @@ def load_data(filename: str, key: Optional[str] = None, default=None):
 class AppConfig:
     """Hauptkonfiguration der Anwendung."""
     app_name: str = "OSINT Recon Tool"
-    version: str = "1.2.0"
+    version: str = "1.3.0"
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -67,8 +67,8 @@ class AppConfig:
     #   {"Instagram": {"cookie": "sessionid=...; csrftoken=..."},
     #    "Reddit":    {"bearer": "..."},
     #    "Twitter/X": {"headers": {"Cookie": "auth_token=...; ct0=..."}}}
-    # Ist für eine Plattform ein Login hinterlegt, wird sie geprüft statt nur
-    # als manueller Link ausgegeben.
+    # Logins ergänzen vorhandene Profilregeln. Ohne belastbare Profilregel bleibt
+    # die Quelle auch mit Login manuell; Zugangsdaten allein sind kein Beleg.
     site_auth: Dict[str, dict] = field(default_factory=dict)
 
     def load_api_keys(self, config_path: Optional[str] = None):
@@ -148,9 +148,9 @@ class AppConfig:
 
 
 # ──────────────────────────────────────────────
-# Username-Modul: Plattformen (Sherlock-Detektionsmodell)
+# Username-Modul: Quellen mit expliziten Profilnachweisen
 # Geladen aus data/username_platforms.json — Liste von Spec-Dicts mit
-# präzisem Nicht-gefunden-Signal pro Plattform.
+# API-Identitätsfeldern bzw. HTML-Metadaten plus negativer Gegenprobe.
 # ──────────────────────────────────────────────
 USERNAME_PLATFORMS: List[dict] = load_data("username_platforms.json", "platforms", [])
 
