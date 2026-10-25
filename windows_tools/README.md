@@ -69,12 +69,21 @@ Datum mit Jahr und RecordID helfen beim Wiederfinden in der Ereignisanzeige.
 Brave, OneDrive, Telemetrie, Dienste, Windows-Features, Game Bar und Taskbar sind
 einzeln waehlbar. SysMain und Windows-Suche bleiben standardmaessig unveraendert:
 ihr Abschalten ist keine allgemeingueltige Beschleunigung. Fuer Brave wird die
-Authenticode-Signatur samt Herausgeber vor der Ausfuehrung geprueft. Das Einstellen
-des Standardbrowsers bleibt eine getrennte, vom Benutzer auszufuehrende Aktion.
+Authenticode-Signatur samt Herausgeber vor der Ausfuehrung geprueft. Die App
+oeffnet keine Standard-App-Einstellungen und startet den Explorer nicht neu.
+Eine Aenderung des Standardbrowsers erfolgt bei Bedarf manuell in Windows.
 Benutzerspezifische HKCU-Uninstaller und unsignierte Programme werden nicht mit
 Administratorrechten ausgefuehrt; dafuer die Windows-Appverwaltung verwenden.
-Klassische Uninstaller ohne registrierten Silent-Modus koennen eigene Dialoge
-oeffnen. Es werden keine erfundenen Silent-Parameter angehaengt.
+Klassische EXE-Uninstaller werden nur mit einem registrierten QuietUninstallString
+gestartet; MSI-Deinstallationen verwenden /qn /norestart. Fehlt ein solcher Modus,
+wird die Aktion mit Begruendung als Skipped protokolliert. Es werden keine
+interaktiven Dialoge versteckt und keine Silent-Parameter geraten. Unterprozesse
+laufen ohne sichtbare Konsole, mit leerem Eingabekanal und verdecktem Startfenster;
+Fehlerausgaben erscheinen im Ergebnis statt in zusaetzlichen Fenstern. Ob ein
+Fremdhersteller seinen registrierten Silent-Modus einhaelt, liegt bei dessen
+Uninstaller. Die Windows-Administratorabfrage und die Bestaetigung der Auswahl
+bleiben sichtbar. Es gibt keine abschliessende Enter-Aufforderung; nach dem Lauf
+zeigt die App das Ergebnis und leert die Auswahl.
 
 Ein Wiederherstellungspunkt wird vor den Aenderungen versucht; Fehler dabei sind
 im Ergebnis sichtbar. Das ist keine Garantie fuer eine vollstaendige Ruecknahme

@@ -119,6 +119,16 @@ function Show-Diagnostic($Data) {
     }
     $status.Text = 'Erfasst: ' + $Data.ProcessCount + ' Prozesse; ' + @($Data.Errors).Count + ' Erfassungsfehler. Nicht lesbare Werte sind unbekannt.'
 }
+function Show-DebloatResults($Rows) {
+    $state.Data = $Rows; Set-Grid $resultsGrid $Rows; $tabs.SelectedIndex = 2
+    $export.Enabled = $true; $apply.Enabled = $false; $packages.Items.Clear()
+    $status.Text = 'Fertig: ' + @($Rows | Where-Object Status -eq 'Error').Count + ' Fehler, ' +
+        @($Rows | Where-Object Status -eq 'Warning').Count + ' Warnungen, ' +
+        @($Rows | Where-Object Status -eq 'Skipped').Count + ' uebersprungen. Details stehen im Ergebnis.'
+    # Keep completion in the app; Enter must not re-run a retained option.
+    for ($i = 0; $i -lt $options.Items.Count; $i++) { $options.SetItemChecked($i,$false) }
+    [void]$resultsGrid.Focus()
+}
 
 $form = [Windows.Forms.Form]::new()
 $form.Text = if ($Tool -eq 'Diagnostic') { 'Security Dashboard' } else { 'Windows Debloat' }
@@ -158,7 +168,7 @@ $packages = [Windows.Forms.CheckedListBox]::new(); $packages.Dock = 'Fill'; $pac
 $packages.DisplayMember = 'Label'; $packages.HorizontalScrollbar = $true
 $options = [Windows.Forms.CheckedListBox]::new(); $options.Dock = 'Fill'; $options.CheckOnClick = $true; $options.DisplayMember = 'Label'
 $optionLabels = [ordered]@{
-    Brave='Brave installieren'; DefaultBrowser='Standardbrowser-Einstellungen oeffnen'
+    Brave='Brave installieren'
     Telemetry='Telemetrie und App-Vorschlaege reduzieren'; DiagTrack='Telemetriedienst deaktivieren'
     dmwappushservice='WAP-Push-Dienst deaktivieren'; SysMain='SysMain deaktivieren (kann App-Starts verlangsamen)'
     WSearch='Suchindex deaktivieren (kann die Suche verlangsamen)'; OneDrive='OneDrive deinstallieren und Synchronisierung sperren'
@@ -234,11 +244,7 @@ $timer.Add_Tick({
                 foreach ($item in $output) { [void]$packages.Items.Add([pscustomobject]@{ Label=($item.Kind + ': ' + $item.Name); Item=$item }) }
                 $apply.Enabled = $true; $status.Text = "$($output.Count) Kandidaten gefunden. Gewuenschte Apps und Optionen auswaehlen."
             }
-            'Apply' {
-                $state.Data = $output; Set-Grid $resultsGrid $output; $tabs.SelectedIndex = 2
-                $export.Enabled = $true; $packages.Items.Clear()
-                $status.Text = 'Fertig: ' + @($output | Where-Object Status -eq 'Error').Count + ' Fehler. Protokoll: ' + $state.LogPath
-            }
+            'Apply' { Show-DebloatResults $output }
             'Smoke' {
                 if ($output[0].Value -ne 42) { throw 'Worker result mismatch' }
                 Set-Grid $resultsGrid @([pscustomobject]@{ Name='Smoke'; Status='OK' })
@@ -254,6 +260,16 @@ $timer.Add_Tick({
                     $eventGrid.CurrentCell = $eventGrid.Rows[0].Cells[0]
                     Update-SystemEventDetails $eventGrid
                     if (-not $eventGrid.Tag.Text.Contains('END-OF-EVENT')) { throw 'Full Windows event message missing in GUI' }
+                } else {
+                    if (@($options.Items | Where-Object Id -eq 'DefaultBrowser').Count) { throw 'Settings launcher must not be a batch action' }
+                    $options.SetItemChecked(0,$true); $apply.Enabled = $true
+                    Show-DebloatResults @([pscustomobject]@{Name='Manual uninstall';Status='Skipped';Detail='No quiet mode'})
+                    if ($options.CheckedItems.Count -or $apply.Enabled -or $tabs.SelectedIndex -ne 2 -or $status.Text -notlike '*1 uebersprungen*') {
+                        throw 'Debloat completion must clear selections and show skipped actions'
+                    }
+                    $enter = $form.GetType().GetMethod('ProcessDialogKey',[Reflection.BindingFlags]'Instance,NonPublic')
+                    [void]$enter.Invoke($form,@([Windows.Forms.Keys]::Enter))
+                    if ($state.Mode -ne 'Smoke' -or $apply.Enabled) { throw 'Enter must not restart completed work' }
                 }
                 $state.SmokeDone = $true
             }

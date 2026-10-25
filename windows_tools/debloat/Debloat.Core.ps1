@@ -54,9 +54,33 @@ function Get-DebloatInventory {
 
 function Invoke-CheckedProcess {
     param([string]$FilePath, [string]$Arguments)
-    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
-    if ($process.ExitCode -notin @(0,1641,3010)) { throw "Exit code $($process.ExitCode): $FilePath" }
-    if ($process.ExitCode -in @(1641,3010)) { $script:RestartNeeded = $true }
+    $folder = Join-Path ([IO.Path]::GetTempPath()) ('DebloatProcess-' + [guid]::NewGuid().ToString('N'))
+    if ($env:OS -eq 'Windows_NT') { New-DebloatDirectory $folder }
+    else { [void][IO.Directory]::CreateDirectory($folder) }
+    try {
+        $inputFile = Join-Path $folder 'stdin.txt'
+        $outputFile = Join-Path $folder 'stdout.txt'; $errorFile = Join-Path $folder 'stderr.txt'
+        [IO.File]::WriteAllText($inputFile,'')
+        # Redirecting all streams disables shell execution and supplies EOF to prompts.
+        # Start-Process -Wait also waits for installer descendants, unlike WaitForExit.
+        $parameters = @{
+            FilePath=$FilePath; Wait=$true; PassThru=$true; ErrorAction='Stop'
+            RedirectStandardInput=$inputFile; RedirectStandardOutput=$outputFile; RedirectStandardError=$errorFile
+        }
+        if ($Arguments) { $parameters.ArgumentList = $Arguments }
+        if ($env:OS -eq 'Windows_NT') { $parameters.WindowStyle = 'Hidden' }
+        else { $parameters.NoNewWindow = $true }
+        $process = Start-Process @parameters
+        try {
+            if ($process.ExitCode -notin @(0,1641,3010)) {
+                $detail = [IO.File]::ReadAllText($errorFile).Trim()
+                if (-not $detail) { $detail = [IO.File]::ReadAllText($outputFile).Trim() }
+                if ($detail.Length -gt 2000) { $detail = $detail.Substring($detail.Length - 2000) }
+                throw "Exit code $($process.ExitCode): $FilePath`n$detail"
+            }
+            if ($process.ExitCode -in @(1641,3010)) { $script:RestartNeeded = $true }
+        } finally { $process.Dispose() }
+    } finally { Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 function Invoke-ClassicUninstall {
@@ -66,7 +90,8 @@ function Invoke-ClassicUninstall {
     }
     # Re-read the exact selected entry. Never execute a command through cmd /c.
     $entry = Get-ItemProperty -LiteralPath $RegistryPath -ErrorAction Stop
-    $command = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+    $hasQuietCommand = -not [string]::IsNullOrWhiteSpace($entry.QuietUninstallString)
+    $command = if ($hasQuietCommand) { $entry.QuietUninstallString } else { $entry.UninstallString }
     if (-not $command) { throw 'No uninstall command registered' }
     if ($command -match '^\s*"([^"]+)"\s*(.*)$') {
         $exe = $Matches[1]; $arguments = $Matches[2]
@@ -74,14 +99,16 @@ function Invoke-ClassicUninstall {
         $exe = $Matches[1]; $arguments = $Matches[2]
     } else { throw 'Uninstall command could not be parsed' }
     $exe = [Environment]::ExpandEnvironmentVariables($exe)
-    if ([IO.Path]::GetFileName($exe) -in @('cmd.exe','powershell.exe','pwsh.exe','wscript.exe','cscript.exe','mshta.exe','rundll32.exe','regsvr32.exe')) {
-        throw 'Script interpreters are not allowed as elevated uninstallers'
+    if ([IO.Path]::GetFileName($exe) -in @('cmd.exe','powershell.exe','pwsh.exe','wscript.exe','cscript.exe','mshta.exe','rundll32.exe','regsvr32.exe','explorer.exe','control.exe','SystemSettings.exe')) {
+        throw 'Shells, script interpreters and settings launchers are not allowed as elevated uninstallers'
     }
     if ([IO.Path]::GetFileName($exe) -ieq 'msiexec.exe') {
-        $guid = [regex]::Match($arguments, '\{[0-9a-fA-F-]{36}\}').Value
+        $guid = [regex]::Match($arguments, '\{[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\}').Value
         if (-not $guid) { throw 'MSI product code missing' }
         $exe = Join-Path $env:SystemRoot 'System32\msiexec.exe'
         $arguments = "/x $guid /qn /norestart"
+    } elseif (-not $hasQuietCommand) {
+        throw [NotSupportedException]::new('Kein unbeaufsichtigter Deinstallationsmodus registriert. Bei Bedarf manuell unter Windows > Installierte Apps entfernen.')
     }
     if (-not [IO.Path]::IsPathRooted($exe) -or $exe.StartsWith('\\')) { throw 'Uninstaller needs an absolute local path' }
     $signature = Get-AuthenticodeSignature -LiteralPath $exe
@@ -141,7 +168,8 @@ function Invoke-DebloatOption {
     param([string]$Id)
     switch ($Id) {
         'Brave' { Install-DebloatBrave }
-        'DefaultBrowser' { Start-Process 'ms-settings:defaultapps' -ErrorAction Stop }
+        # Compatibility with older scripted plans: never open Settings from a batch.
+        'DefaultBrowser' { throw [NotSupportedException]::new('Der Standardbrowser bleibt unveraendert. Eine Aenderung muss in Windows > Standard-Apps bestaetigt werden.') }
         'Telemetry' {
             foreach ($path in @('HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection')) {
                 Set-DebloatRegistry $path 'AllowTelemetry' 0
@@ -268,7 +296,8 @@ function Invoke-DebloatPlan {
                 'Option' { Invoke-DebloatOption $item.Id }
                 default { throw "Unknown action kind: $($item.Kind)" }
             }
-        } catch { $status = 'Error'; $detail = $_.Exception.Message }
+        } catch [NotSupportedException] { $status = 'Skipped'; $detail = $_.Exception.Message }
+        catch { $status = 'Error'; $detail = $_.Exception.Message }
         $entry = [pscustomobject]@{ Name=$item.Name; Status=$status; Detail=$detail }
         $script:Results.Add($entry)
         Save-DebloatLog
