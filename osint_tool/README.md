@@ -1,4 +1,4 @@
-# 🔍 OSINT Recon Tool v1.2
+# 🔍 OSINT Recon Tool v1.3
 
 Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
@@ -10,11 +10,11 @@ Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
 | Modul | Eingabe | Was es tut |
 |-------|---------|------------|
-| **Username** | `@john_doe` | Prüft **~60 Plattformen** mit präziser Sherlock-Detektion (echter 404 / Not-Found-Text / Redirect) statt naivem „HTTP 200". Seiten, die anonym nicht zuverlässig prüfbar sind (Instagram, X, TikTok, LinkedIn, StackOverflow …), werden als manueller Link markiert – uneindeutige Antworten werden gekennzeichnet. Mit hinterlegtem Login (`site_auth`) werden auch diese geprüft. |
-| **E-Mail** | `test@example.com` | Format & Normalisierung (Gmail-Kanonisierung), Provider (Domain + MX), **MX/SPF/DMARC**, Wegwerf-/Rollen-Konto-Erkennung, **Gravatar** (Name/Ort/verknüpfte Accounts), **GitHub** (Commit-/User-Suche per E-Mail), **Account-Existenz im Holehe-Stil** über viele Seiten inkl. Microsoft/Office 365, Spotify, Strava, eBay, Amazon, Tumblr u.a., **keyfreie Breach-Checks** (XposedOrNot, LeakCheck, ProxyNova) sowie optional HIBP/Hunter/DeHashed, plus generierte **Such-/Dork-Links** |
+| **Username** | `@john_doe` | **87 Plattformen**: 28 API-Regeln mit exaktem Profilbezeichner, 45 HTML-Regeln mit Profil-Metadaten und negativer Gegenprobe, 14 ausschließlich manuelle Quellen. HTTP 200, Login-Seiten und Bot-Sperren zählen nicht als Treffer. |
+| **E-Mail** | `test@example.com` | Format & Normalisierung (Gmail-Kanonisierung), Provider (Domain + MX), **MX/SPF/DMARC**, Wegwerf-/Rollen-Konto-Erkennung, **Gravatar** (Name/Ort/verknüpfte Accounts), **GitHub** (Commit-/User-Suche per E-Mail), **Account-Existenz im Holehe-Stil** über viele Seiten mit Spotify, Strava, Tumblr u.a.; Microsoft/Federation nur als unbestätigter Hinweis; keine automatischen Amazon/eBay-Logins, **keyfreie Breach-Checks** (XposedOrNot, LeakCheck, ProxyNova) sowie optional HIBP/Hunter/DeHashed, plus generierte **Such-/Dork-Links** |
 | **Telefon** | `+43 660 1234567` | **libphonenumber**: Land/Region, Geocoding, **Carrier**, Nummerntyp (Mobil/Festnetz/VoIP), Zeitzonen, alle Formate; Messaging-Links (WhatsApp/Telegram/Viber); Reverse-Lookup/Spam/Telefonbuch (Truecaller, tellows, Das Örtliche, Herold …); NumVerify optional |
 | **Domain/IP** | `example.com` / `1.2.3.4` | DNS (A/AAAA/MX/NS/TXT/SOA/CNAME/SRV/CAA, DoH-Fallback), **SPF/DMARC/DKIM**, RDAP/WHOIS, TLS-Zertifikat, HTTP-Security-Header-Grade, Subdomains (crt.sh), robots/sitemap/**security.txt**, **IP-Geo/ASN** (ipwho.is über HTTPS), **offene Ports & CVEs via Shodan InternetDB (keyfrei!)**, Wayback; Shodan optional |
-| **Name** | `Max Mustermann` | Einzeln klickbare Such-/Dork-Links (Suchmaschinen, Social via Google-Dorks, **People-Search US**, **DE/AT/EU-Verzeichnisse & Register** – Das Telefonbuch, Herold, North Data, Handelsregister, OpenCorporates), Username-Varianten, **live ORCID- & GitHub-Suche** |
+| **Name** | `Max Mustermann` | Einzeln klickbare Such-/Dork-Links (Suchmaschinen, Social via Google-Dorks, **People-Search US**, **DE/AT/EU-Verzeichnisse & Register** – Das Telefonbuch, Herold, North Data, Handelsregister, OpenCorporates), Username-Varianten, **live ORCID- & GitHub-Suche** (Namenskandidaten, kein Identitätsnachweis), insgesamt 42 manuelle Recherchequellen |
 | **Bild/Gesicht** 🆕 | `bild.jpg` / Bild-URL | **Grundstein** für PimEyes-artige Gesichtssuche: Direktlinks zu Reverse-Face-/Image-Engines (Google Lens, Yandex, Bing, TinEye, PimEyes, FaceCheck.ID, Search4Faces, Lenso.ai), optionale lokale Gesichts-Detektion, dokumentierte ML-Roadmap (Detection→Embedding→Index→Matching) |
 
 ### Allgemein
@@ -26,12 +26,31 @@ Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 - ✅ **Parallele Requests** (ThreadPool)
 - ✅ **Optionale API-Keys** für erweiterte Funktionen
 - ✅ **Präzise Detektion** – eindeutige Signale statt Rateversuch, mit gekennzeichneten Unsicherheiten
-- ✅ **Login-Hinterlegung** (`site_auth`) für sonst nicht prüfbare Seiten
+- ✅ **Login-Hinterlegung** (`site_auth`) als Ergänzung vorhandener Profilregeln; ohne verlässliche Regel bleibt die Quelle manuell
 - ✅ **Kompilierbar als Windows-EXE** (PyInstaller)
 - ✅ **Native Desktop-App** mit Ergebnistabelle, Details, Filtern und echtem Scan-Abbruch
 - ✅ **Portables Windows-ZIP**: entpacken und EXE starten, ohne Python-Installation
 
 ### Zuverlässigkeit von Scans und Exporten
+
+- Öffentliche Profile sind von Personenidentität zu unterscheiden. Derselbe Username
+  auf zwei Seiten kann zwei verschiedenen Personen gehören. Namenstreffer bleiben Hinweise.
+- Die Desktop-Filter **Unbestätigt** und **Manuelle Quellen** trennen Hinweise von
+  belegten Treffern. Details nennen den Grund und, bei Profilen, den Prüf-Endpunkt.
+- Neue Plattformen: Codeberg, Gitea.com, Debian Salsa, GNOME GitLab, KDE Invent,
+  Codewars, Codeforces, Scratch, Discogs, iNaturalist, Open Library, Launchpad,
+  Lemmy.world, Lemmy.ml, OpenStreetMap, MusicBrainz, AtCoder und BoardGameGeek.
+- Zusätzliche Namensrecherche: OpenAlex, ORCID, Semantic Scholar, PubMed, Internet
+  Archive, Wikidata, Companies House, SEC EDGAR, ICIJ Offshore Leaks, OpenSanctions.
+  Diese Links lösen keine automatische Recherche aus und sind keine Treffer.
+- JSON-Profile benötigen einen Request; nur mögliche HTML-Treffer erhalten eine
+  zusätzliche Gegenprobe mit zufälligem Nutzernamen. Antworten sind auf 2 MiB begrenzt.
+  Es kommen keine Laufzeitabhängigkeiten hinzu. Zusätzliche Quellen/Gegenproben können
+  die Dauer eines Online-Scans erhöhen; keine pauschale Geschwindigkeitsgarantie.
+- Profilregeln und Fehlantworten sind durch Offline-Regressionsfälle geprüft.
+  Ein flächendeckender Live-Test aller Anbieter war in der eingeschränkten Build-
+  Umgebung nicht möglich. API-/Seitenänderungen, Sperren und Rate-Limits können Quellen
+  weiterhin unbestätigt machen; die App versucht diese Sperren nicht zu umgehen.
 
 - Die automatische Erkennung unterstützt gültige IPv4-/IPv6-Adressen,
   internationale Domainnamen und HTTP(S)-URLs mit Ports, Pfaden und Query-Parametern.

@@ -26,7 +26,23 @@ SEVERITIES = {"found": "Treffer", "warning": "Warnung", "critical": "Kritisch",
               "info": "Info", "not_found": "Kein Treffer"}
 FILTERS = {"Alle Ergebnisse": None, "Treffer": {"found"},
            "Warnungen": {"warning", "critical"}, "Info": {"info"},
-           "Nicht gefunden": {"not_found"}}
+           "Nicht gefunden": {"not_found"}, "Unbestätigt": set(), "Manuelle Quellen": set()}
+
+
+def matches_filter(row, name):
+    data = row.get('data') or {}
+    if name == 'Unbestätigt':
+        return data.get('verdict') in ('candidate', 'uncertain')
+    if name == 'Manuelle Quellen':
+        return data.get('manual_check', False) or data.get('verdict') == 'manual'
+    allowed = FILTERS[name]
+    return allowed is None or row['severity'] in allowed
+
+
+def result_status(row):
+    verdict = (row.get('data') or {}).get('verdict')
+    return {'uncertain': 'Unbestätigt', 'candidate': 'Hinweis', 'manual': 'Manuell'}.get(
+        verdict, SEVERITIES.get(row['severity'], row['severity']))
 
 
 def safe_link(value):
@@ -74,7 +90,7 @@ class DesktopApp:
         self.detect_id = None
         self.closed = False
 
-        root.title("OSINT Recon · Desktop")
+        root.title(f"OSINT Recon {self.config.version} · Desktop")
         root.geometry("960x680")
         root.minsize(800, 580)
         root.configure(background="#f5f7fb")
@@ -295,14 +311,13 @@ class DesktopApp:
     def render_rows(self):
         self.tree.delete(*self.tree.get_children())
         self.visible_rows.clear()
-        allowed = FILTERS[self.filter.get()]
         for index, row in enumerate(self.rows):
             severity = row["severity"]
-            if allowed is not None and severity not in allowed:
+            if not matches_filter(row, self.filter.get()):
                 continue
             iid = str(index)
             self.visible_rows[iid] = row
-            self.tree.insert("", "end", iid=iid, values=(SEVERITIES.get(severity, severity), row["source"], row["title"]), tags=(severity,))
+            self.tree.insert("", "end", iid=iid, values=(result_status(row), row["source"], row["title"]), tags=(severity,))
         self.selected_links = []
         self.link.set("")
         self.link_box.configure(values=(), state="disabled")

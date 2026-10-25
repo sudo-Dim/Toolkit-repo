@@ -16,7 +16,7 @@ Umfassende E-Mail-Analyse mit vielen keyfreien Quellen:
 
 Strikte Signal-Auswertung: Nur ein EINDEUTIGES Treffer-Signal wird als FOUND
 gewertet. Blockierte/Captcha-/Token-fehlt-Antworten gelten als „unklar"
-(INCONCLUSIVE) — niemals als Treffer. Damit gibt es keine False Positives.
+(INCONCLUSIVE). Anbieter-Signale sind keine Garantie für die Identität einer Person.
 """
 
 import re
@@ -28,6 +28,7 @@ from urllib.parse import quote
 
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
 from ..core.http import build_session, DEFAULT_UA
+from ..core.evidence import response_problem
 from ..core.config import (
     EMAIL_PROVIDERS, MX_PROVIDER_PATTERNS, ROLE_LOCAL_PARTS, DISPOSABLE_DOMAINS,
     EMAIL_ACCOUNT_SITES, EMAIL_DORKS,
@@ -168,17 +169,20 @@ class EmailModule(BaseModule):
     # ── Gravatar ───────────────────────────────────────────────
     def _check_gravatar(self, email: str, session) -> dict:
         h = hashlib.md5(email.strip().lower().encode()).hexdigest()
-        result = {"hash": h, "has_avatar": False, "profile": None}
+        result = {"hash": h, "has_avatar": False, "profile": None, "profile_status": None}
         try:
             r = session.head(GRAVATAR_AVATAR_URL.format(h), timeout=self._timeout)
-            result["has_avatar"] = r.status_code == 200
+            result["has_avatar"] = r.status_code == 200 and r.headers.get('Content-Type', '').lower().startswith('image/')
             if result["has_avatar"]:
                 result["avatar_url"] = f"https://www.gravatar.com/avatar/{h}"
             r2 = session.get(GRAVATAR_PROFILE_URL.format(h), timeout=self._timeout)
+            result['profile_status'] = r2.status_code
             if r2.status_code == 200:
                 entries = (r2.json().get("entry") or [])
-                if entries:
-                    e = entries[0]
+                matching = [entry for entry in entries if isinstance(entry, dict)
+                            and h in (entry.get('hash'), entry.get('requestHash'))]
+                if matching:
+                    e = matching[0]
                     name = e.get("name")
                     result["profile"] = {
                         "display_name": e.get("displayName", ""),
@@ -200,7 +204,7 @@ class EmailModule(BaseModule):
 
     # ── GitHub: Commit- & User-Suche per E-Mail ────────────────
     def _check_github(self, email: str, session) -> dict:
-        out = {"commits": None, "user": None}
+        out = {"commits": None, "user": None, "candidate": None}
         auth = {}
         if self.config and self.config.get_api_key("github"):
             auth["Authorization"] = f"Bearer {self.config.get_api_key('github')}"
@@ -213,6 +217,9 @@ class EmailModule(BaseModule):
                 data = r.json()
                 logins, repos, sample = set(), set(), None
                 for it in data.get("items", []):
+                    claimed_email = ((it.get('commit') or {}).get('author') or {}).get('email', '')
+                    if not isinstance(claimed_email, str) or claimed_email.casefold() != email.casefold():
+                        continue
                     a = (it.get("author") or {})
                     if a.get("login"):
                         logins.add(a["login"])
@@ -220,8 +227,10 @@ class EmailModule(BaseModule):
                     if repo:
                         repos.add(repo)
                     sample = sample or it.get("html_url")
-                out["commits"] = {"total": data["total_count"], "logins": sorted(logins),
-                                  "repos": sorted(repos)[:10], "sample_commit": sample}
+                if sample:
+                    out["commits"] = {"total": data["total_count"], "logins": sorted(logins),
+                                      "repos": sorted(repos)[:10], "sample_commit": sample,
+                                      "note": "Commit-Autoren-E-Mails sind selbst angegebene Metadaten, kein Kontonachweis."}
         except Exception as exc:
             self.add_error(f"GitHub-Commits: {exc}")
         try:
@@ -230,8 +239,17 @@ class EmailModule(BaseModule):
                 headers={"Accept": "application/vnd.github+json", **auth}, timeout=self._timeout)
             if r.status_code == 200 and r.json().get("total_count", 0) > 0:
                 it = r.json()["items"][0]
-                out["user"] = {"login": it.get("login"), "profile": it.get("html_url"),
-                               "avatar": it.get("avatar_url")}
+                out['candidate'] = {'login': it.get('login'), 'profile': it.get('html_url')}
+                # Search ranking alone is not proof. Confirm the exact publicly listed email.
+                if isinstance(it.get('login'), str):
+                    profile = session.get(f"https://api.github.com/users/{quote(it['login'], safe='')}",
+                                          headers={"Accept": "application/vnd.github+json", **auth}, timeout=self._timeout)
+                    if profile.status_code == 200:
+                        account = profile.json()
+                        public_email = account.get('email')
+                        if (isinstance(public_email, str) and public_email.casefold() == email.casefold()
+                                and account.get('login', '').casefold() == it['login'].casefold()):
+                            out['user'] = {'login': account['login'], 'profile': account.get('html_url')}
         except Exception as exc:
             self.add_error(f"GitHub-User: {exc}")
         return out
@@ -249,7 +267,7 @@ class EmailModule(BaseModule):
 
     def _eval_rule(self, rule, status, text, js) -> bool:
         if "all" in rule:
-            return all(self._eval_rule(r, status, text, js) for r in rule["all"])
+            return bool(rule["all"]) and all(self._eval_rule(r, status, text, js) for r in rule["all"])
         if "status" in rule:
             return status in rule["status"]
         if "body_equals" in rule:
@@ -263,7 +281,7 @@ class EmailModule(BaseModule):
             if val is _MISSING:
                 return False
             if "in" in rule:
-                return val in rule["in"]
+                return any(type(val) is type(expected) and val == expected for expected in rule["in"])
             if "eq" in rule:
                 expected = rule["eq"]
                 if isinstance(expected, bool) or isinstance(val, bool):
@@ -305,20 +323,22 @@ class EmailModule(BaseModule):
             except Exception:
                 js = None
             info["status"] = status
-            for rule in site.get("exists", []):
-                if self._eval_rule(rule, status, text, js):
-                    info["verdict"] = "exists"
-                    if isinstance(js, dict) and site.get("extract"):
-                        info["extracted"] = {k: js.get(k) for k in site["extract"] if k in js}
-                    return info
-            for rule in site.get("notexists", []):
-                if self._eval_rule(rule, status, text, js):
-                    info["verdict"] = "notexists"
-                    return info
-            info["verdict"] = "inconclusive"
+            problem = response_problem(status, text, str(resp.url), url)
+            # Even a well-formed error JSON on a throttled/failed request is not evidence.
+            if problem or status not in site.get('response_statuses', [200]):
+                info.update(verdict='inconclusive', reason=problem or f'Unerwarteter HTTP-Status {status}')
+                return info
+            positive = any(self._eval_rule(rule, status, text, js) for rule in site.get('exists', []))
+            negative = any(self._eval_rule(rule, status, text, js) for rule in site.get('notexists', []))
+            info['verdict'] = ('hint' if site.get('hint_only') else 'exists') if positive and not negative else 'notexists' if negative and not positive else 'inconclusive'
+            info['reason'] = ('Widersprüchliche Anbieter-Signale' if positive and negative else
+                              'Nur Anbieter-Hinweis; keine sichere Konto-Zuordnung' if site.get('hint_only') else
+                              'Explizites Anbieter-Signal' if positive or negative else 'Kein eindeutiges Anbieter-Signal')
+            if isinstance(js, dict) and site.get('extract'):
+                info['extracted'] = {k: js.get(k) for k in site['extract'] if k in js}
         except Exception as exc:
             info["verdict"] = "inconclusive"
-            info["error"] = str(exc)
+            info["error"] = self.redact(str(exc))
         return info
 
     # ── Token-/CSRF-basierte Account-Checks (eigener Flow) ─────
@@ -350,7 +370,9 @@ class EmailModule(BaseModule):
                                 "Referer": "https://www.strava.com/register/free"},
                        timeout=self._acct_timeout)
             body = (r2.text or "").strip().lower()
-            if body == "false":
+            if response_problem(r2.status_code, r2.text, str(r2.url)) or r2.status_code != 200:
+                info['verdict'] = 'inconclusive'
+            elif body == "false":
                 info["verdict"] = "exists"
             elif body == "true":
                 info["verdict"] = "notexists"
@@ -405,10 +427,10 @@ class EmailModule(BaseModule):
                 if isinstance(errs, list) and errs and isinstance(errs[0], dict):
                     code = errs[0].get("code")
                 code = code if code is not None else self._json_path(js, "response.email")
-            if code == 2:
+            if response_problem(r2.status_code, r2.text, str(r2.url)) or r2.status_code not in (200, 400, 422):
+                info['verdict'] = 'inconclusive'
+            elif type(code) is int and code == 2:
                 info["verdict"] = "exists"
-            elif r2.status_code == 200 and (js is not None) and not (isinstance(js, dict) and js.get("errors")):
-                info["verdict"] = "notexists"
             else:
                 info["verdict"] = "inconclusive"
         except Exception as exc:
@@ -428,8 +450,10 @@ class EmailModule(BaseModule):
                 return {"source": "XposedOrNot", "found": False, "breaches": []}
             if r.status_code == 200:
                 breaches = r.json().get("breaches") or []
+                if not isinstance(breaches, list):
+                    return None
                 names = breaches[0] if breaches and isinstance(breaches[0], list) else breaches
-                names = [n for n in names if n]
+                names = [n for n in names if isinstance(n, str) and n.strip()]
                 return {"source": "XposedOrNot", "found": bool(names), "breaches": names}
         except Exception as exc:
             self.add_error(f"XposedOrNot: {exc}")
@@ -441,7 +465,7 @@ class EmailModule(BaseModule):
                             timeout=self._timeout)
             if r.status_code == 200:
                 data = r.json()
-                if data.get("success"):
+                if data.get("success") is True and type(data.get('found')) is int:
                     sources = [s.get("name") for s in data.get("sources", []) if s.get("name")]
                     return {"source": "LeakCheck (public)", "found": data.get("found", 0) > 0,
                             "count": data.get("found", 0), "breaches": sources,
@@ -457,14 +481,18 @@ class EmailModule(BaseModule):
             if r.status_code == 200:
                 data = r.json()
                 lines = data.get("lines", []) or []
+                if not isinstance(lines, list) or type(data.get('count')) is not int:
+                    return None
                 pw_hits = 0
                 for ln in lines:
-                    if ":" in ln:
+                    if isinstance(ln, str) and ":" in ln:
                         u, _, pw = ln.partition(":")
-                        if email.lower() in u.lower() and pw:
+                        if email.casefold() == u.strip().casefold() and pw:
                             pw_hits += 1
-                return {"source": "ProxyNova COMB", "found": data.get("count", 0) > 0,
-                        "count": data.get("count", 0), "password_hint_count": pw_hits,
+                if data['count'] > 0 and not pw_hits:
+                    return None  # Search count alone may include substring matches.
+                return {"source": "ProxyNova COMB", "found": pw_hits > 0,
+                        "count": pw_hits, "search_count": data['count'], "password_hint_count": pw_hits,
                         "note": "Passwörter werden aus Datenschutzgründen nicht angezeigt."}
         except Exception as exc:
             self.add_error(f"ProxyNova: {exc}")
@@ -481,7 +509,9 @@ class EmailModule(BaseModule):
                 headers={"hibp-api-key": key, "User-Agent": "OSINT-Recon-Tool"}, timeout=self._timeout)
             if r.status_code == 200:
                 breaches = r.json()
-                return {"source": "Have I Been Pwned", "found": True, "count": len(breaches),
+                if not isinstance(breaches, list) or any(not isinstance(b, dict) or not b.get('Name') for b in breaches):
+                    return None
+                return {"source": "Have I Been Pwned", "found": bool(breaches), "count": len(breaches),
                         "breaches": [b.get("Name") for b in breaches],
                         "details": [{"name": b.get("Name"), "date": b.get("BreachDate"),
                                      "data": b.get("DataClasses", [])} for b in breaches[:20]]}
@@ -500,7 +530,11 @@ class EmailModule(BaseModule):
             r = session.get(f"https://api.dehashed.com/search?query=email:{quote(email)}&size=100",
                             headers={"Accept": "application/json"}, auth=(user, key), timeout=self._timeout)
             if r.status_code == 200:
-                entries = r.json().get("entries") or []
+                candidates = r.json().get("entries") or []
+                entries = [entry for entry in candidates if isinstance(entry, dict)
+                           and isinstance(entry.get('email'), str) and entry['email'].casefold() == email.casefold()]
+                if candidates and not entries:
+                    return None
                 dbs = sorted({e.get("database_name") for e in entries if e.get("database_name")})
                 return {"source": "DeHashed", "found": len(entries) > 0, "count": len(entries), "breaches": dbs}
         except Exception as exc:
@@ -617,7 +651,7 @@ class EmailModule(BaseModule):
 
         # 4. Gravatar
         grav = self._check_gravatar(email_l, session)
-        if grav["has_avatar"] or grav["profile"]:
+        if grav["profile"]:
             prof = grav.get("profile") or {}
             self.add_result(OSINTResult(
                 source="Gravatar", module=self.name, category="Profile",
@@ -628,25 +662,34 @@ class EmailModule(BaseModule):
                     "linked_accounts": prof.get("accounts"), "urls": prof.get("urls"),
                     "has_avatar": grav["has_avatar"]}.items() if v},
                 url=grav.get("avatar_url") or prof.get("profile_url")))
+        elif grav['has_avatar']:
+            self.add_result(OSINTResult(
+                source='Gravatar', module=self.name, category='Profile', severity=ResultSeverity.INFO,
+                title='Gravatar-Bild vorhanden; öffentliches Profil nicht belegt',
+                data={'has_avatar': True, 'verdict': 'candidate'}, url=grav.get('avatar_url')))
         else:
             self.add_result(OSINTResult(
                 source="Gravatar", module=self.name, category="Profile",
-                severity=ResultSeverity.NOT_FOUND, title="Kein Gravatar-Profil",
-                data={"hash": grav["hash"]}))
+                severity=ResultSeverity.NOT_FOUND if grav['profile_status'] == 404 else ResultSeverity.INFO,
+                title="Kein öffentliches Gravatar-Profil" if grav['profile_status'] == 404 else 'Gravatar-Prüfung unklar',
+                data={"hash": grav["hash"], 'verdict': 'not_found' if grav['profile_status'] == 404 else 'uncertain'}))
         tick("Gravatar geprüft")
 
         # 5. GitHub
         gh = self._check_github(email_l, session)
-        if gh.get("commits") or gh.get("user"):
+        if gh.get("commits") or gh.get("user") or gh.get('candidate'):
             c = gh.get("commits") or {}
             u = gh.get("user") or {}
             self.add_result(OSINTResult(
                 source="GitHub", module=self.name, category="Development",
-                severity=ResultSeverity.FOUND, title="GitHub-Konto/Commits über E-Mail gefunden",
+                severity=ResultSeverity.FOUND if u else ResultSeverity.INFO,
+                title="GitHub-Profil mit exakt veröffentlichter E-Mail" if u else "GitHub-Hinweise — Konto-Zuordnung unbestätigt",
                 data={k: v for k, v in {
                     "user": u.get("login"), "profile": u.get("profile"),
                     "commit_authors": c.get("logins"), "commit_total": c.get("total"),
-                    "repositories": c.get("repos"), "sample_commit": c.get("sample_commit")}.items() if v},
+                    "repositories": c.get("repos"), "sample_commit": c.get("sample_commit"),
+                    'candidate': gh.get('candidate'), 'verdict': 'found' if u else 'candidate',
+                    'reason': 'Exakte öffentliche E-Mail' if u else 'Suchtreffer/Commit-Metadaten sind kein Kontonachweis'}.items() if v},
                 url=u.get("profile") or c.get("sample_commit")))
         tick("GitHub geprüft")
 
@@ -677,16 +720,25 @@ class EmailModule(BaseModule):
                     found_sites.append(info["site"])
                     self.add_result(OSINTResult(
                         source=info["site"], module=self.name, category=info.get("category", "Account"),
-                        severity=ResultSeverity.FOUND, title=f"Konto existiert bei {info['site']}",
+                        severity=ResultSeverity.FOUND, title=f"{info['site']}: Anbieter meldet E-Mail als registriert",
                         data={"exists": True, "reliability": info.get("reliability"),
                               **({"details": info["extracted"]} if info.get("extracted") else {})}))
                 elif verdict == "notexists":
                     self.add_result(OSINTResult(
                         source=info["site"], module=self.name, category=info.get("category", "Account"),
-                        severity=ResultSeverity.NOT_FOUND, title=f"Kein Konto bei {info['site']}",
-                        data={"exists": False}))
+                        severity=ResultSeverity.NOT_FOUND, title=f"{info['site']}: Anbieter meldet E-Mail als nicht registriert",
+                        data={"exists": False, 'verdict': 'not_found', 'reason': info.get('reason')}))
+                elif verdict == 'hint':
+                    self.add_result(OSINTResult(
+                        source=info['site'], module=self.name, category=info.get('category', 'Account'),
+                        severity=ResultSeverity.INFO, title=f"{info['site']}: Konto-Hinweis, nicht bestätigt",
+                        data={'verdict': 'candidate', 'reason': info.get('reason'), 'details': info.get('extracted')}))
                 else:
                     unclear.append(info.get("site", "?"))
+                    self.add_result(OSINTResult(
+                        source=info['site'], module=self.name, category=info.get('category', 'Account'),
+                        severity=ResultSeverity.INFO, title=f"{info['site']}: nicht eindeutig prüfbar",
+                        data={'verdict': 'uncertain', 'reason': info.get('reason') or info.get('error') or 'Kein eindeutiges Anbieter-Signal'}))
                 tick(f"{info.get('site', '?')} geprüft")
         except FuturesTimeout:
             for fut, nm in futs.items():
@@ -751,7 +803,7 @@ class EmailModule(BaseModule):
             self.add_result(OSINTResult(
                 source=dork["name"], module=self.name,
                 category=("Such-Link · " + dork.get("category", "")).strip(" ·"),
-                severity=ResultSeverity.INFO, title=dork["name"], data={},
+                severity=ResultSeverity.INFO, title=dork["name"], data={'manual_check': True, 'verdict': 'manual'},
                 url=self._tmpl(dork["url"], tokens)))
         candidates = []
         for c in (local, local.replace(".", ""), local.split("+")[0], local.split("+")[0].replace(".", "")):

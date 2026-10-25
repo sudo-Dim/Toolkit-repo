@@ -16,6 +16,17 @@ def check_runtime():
     import requests
     import phonenumbers
     from ..core.http import build_session
+    from ..core.evidence import profile_evidence
+
+    sources = {source['name']: source for source in USERNAME_PLATFORMS}
+    for name in ('GitHub', 'Codeberg'):
+        source = sources[name]
+        url = source['url_probe'].replace('{}', 'example')
+        assert profile_evidence(source, 200, '{"login":"example","id":123}', url, 'example')[0] == 'found'
+        assert profile_evidence(source, 200, '<title>Sign in</title>', url, 'example')[0] == 'uncertain'
+    html_source = {'url': 'https://example.com/{}', 'evidence': {'kind': 'html'}}
+    assert profile_evidence(html_source, 200, '<link rel="canonical" href="/example">',
+                            'https://example.com/example', 'example')[0] == 'candidate'
 
     records = {
         "A": "192.0.2.1", "AAAA": "2001:db8::1", "MX": "10 mail.example.",
@@ -40,7 +51,7 @@ def check_runtime():
         assert session.get_adapter("https://").max_retries.total == 2
         ssl.create_default_context(cafile=requests.certs.where())
     return {"dns_record_types": len(records), "phone_regions": len(phonenumbers.SUPPORTED_REGIONS),
-            "tls_and_http": True}
+            "tls_and_http": True, "profile_evidence": True}
 
 
 def run_smoke_test(app, report_path):
