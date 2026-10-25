@@ -48,7 +48,9 @@ belastbareren Ergebnissen bei weiterhin null nachzuinstallierenden Abhaengigkeit
   HTML-Escaping, deutsche Dezimaldarstellung und unbekannte Sicherheitswerte.
 - Windows-PE-Dateien gegen die offiziellen .NET-Framework-4.8-Referenzassemblies
   kompiliert; komprimierte Ressourcen entsprechen den Quelltexten.
-- Windows PowerShell 5.1, GUI-Start, echte CIM-Abfragen und Deinstallationen wurden
-  hier **nicht** ausgefuehrt. Der hinzugefuegte Windows-Workflow deckt Build,
-  Kernpruefungen, GUI-Start und nur lesende Erfassung ab. Destruktive Aktionen
-  muessen separat auf einer entbehrlichen Windows-Testinstallation geprueft werden.
+- Windows PowerShell 5.1: 33 Kernpruefungen bestanden. Beide auf Windows gebauten
+  EXEs haben ihre GUI-/Worker-Starttests bestanden. Reale CIM-Abfragen und
+  HTML-Export wurden auf Windows Server 2025 geprueft.
+- Echte Deinstallationen und Aenderungen am privaten Windows-PC wurden nicht
+  ausgefuehrt. Destruktive Aktionen bleiben separat auf einer entbehrlichen
+  Windows-Testinstallation zu validieren.

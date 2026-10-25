@@ -98,8 +98,8 @@ Systemaenderungen vor. Zusaetzlich prueft der Windows-Workflow beide echten GUIs
 ihre Hintergrund-Worker und eine reale, nur lesende Diagnose. `--self-test` am EXE
 oeffnet und schliesst die GUI mit Testdaten; Debloat wird dabei nicht angewendet.
 
-Die hier bereitgestellten EXEs wurden unter Linux gegen die offiziellen
-.NET-Framework-Referenzassemblies kompiliert. Die Kernpruefungen bestehen; eine
-tatsaechliche Windows-Ausfuehrung und der Windows-Workflow wurden in dieser
-Arbeitsumgebung noch nicht ausgefuehrt. Reale App-Deinstallationen sind daher
-noch nicht validiert. Daten und Methoden zur Verschlankung: [PERFORMANCE.md](PERFORMANCE.md).
+Die Windows-Builds und beide GUI-Starttests bestehen auf dem GitHub-Windows-Runner
+(Windows Server 2025 mit Windows PowerShell 5.1). Auch eine reale, nur lesende
+Diagnose mit HTML-Export wurde dort geprueft. Reale Deinstallationen wurden nicht
+ausgefuehrt; diese muessen auf einer entbehrlichen Windows-Testinstallation
+validiert werden. Einzelheiten: [PERFORMANCE.md](PERFORMANCE.md).
