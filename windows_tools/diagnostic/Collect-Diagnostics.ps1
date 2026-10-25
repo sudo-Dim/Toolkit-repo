@@ -186,13 +186,13 @@ $WarningsErrors = Invoke-SafeCollect 'System Warnings and Errors' {
         } -MaxEvents $MaxEvents -ErrorAction Stop |
         ForEach-Object {
             $msg = if ($null -ne $_.Message) { [string]$_.Message } else { '' }
-            $shortMsg = $msg
             [PSCustomObject]@{
-                Time     = $_.TimeCreated.ToString('dd.MM. HH:mm:ss')
+                Time     = $_.TimeCreated.ToString('dd.MM.yyyy HH:mm:ss')
                 Level    = switch ($_.Level) { 1 {'Critical'} 2 {'Error'} 3 {'Warning'} }
                 Source   = $_.ProviderName
                 ID       = $_.Id
-                Message  = $shortMsg
+                RecordID = $_.RecordId
+                Message  = $msg
             }
         }
     } catch {
@@ -428,7 +428,11 @@ function ConvertTo-HtmlTableRows {
             if ($valStr -eq 'Established') { $class = ' class="tag-green"' }
             if ($valStr -eq 'Listen') { $class = ' class="tag-blue"' }
             $escaped = [System.Net.WebUtility]::HtmlEncode($valStr)
-            if ($class) {
+            if ($prop -eq 'Message') {
+                $preview = ($valStr -replace '[\r\n]+', ' ')
+                if ($preview.Length -gt 120) { $preview = $preview.Substring(0,120) + '...' }
+                [void]$rows.Append('<td class="message-cell"><details><summary>' + [System.Net.WebUtility]::HtmlEncode($preview) + ' (Volltext)</summary><div class="event-message">' + $escaped + '</div></details></td>')
+            } elseif ($class) {
                 [void]$rows.Append('<td><span' + $class + '>' + $escaped + '</span></td>')
             } else {
                 [void]$rows.Append('<td>' + $escaped + '</td>')
@@ -522,7 +526,7 @@ $fwRows          = ConvertTo-HtmlTableRows -Data $FirewallStatus -Properties @('
 $procRows        = ConvertTo-HtmlTableRows -Data $TopProcesses -Properties @('PID','Name','CPU_s','MemMB','Threads','Handles')
 $failedLoginRows = ConvertTo-HtmlTableRows -Data $FailedLogins -Properties @('Time','Account','Domain','Source','LogonType')
 $serviceRows     = ConvertTo-HtmlTableRows -Data $ServiceInstalls -Properties @('Time','ServiceName','ImagePath','AccountName','StartType')
-$warnErrorRows   = ConvertTo-HtmlTableRows -Data $WarningsErrors -Properties @('Time','Level','Source','ID','Message')
+$warnErrorRows   = ConvertTo-HtmlTableRows -Data $WarningsErrors -Properties @('Time','Level','Source','ID','RecordID','Message')
 $netRows         = ConvertTo-HtmlTableRows -Data $NetConnections -Properties @('Process','PID','LocalAddr','RemoteAddr','State')
 $userRows        = ConvertTo-HtmlTableRows -Data $LocalUsers -Properties @('Name','Enabled','LastLogon','PwdLastSet','Description')
 $autostartRows   = ConvertTo-HtmlTableRows -Data $AutoStarts -Properties @('Location','Name','Command')
@@ -553,7 +557,7 @@ $fwHdr   = New-HeaderRow @('Profile','Enabled','Inbound','Outbound')
 $procHdr = New-HeaderRow @('PID','Name','CPU (s)','Mem (MB)','Threads','Handles')
 $flHdr   = New-HeaderRow @('Time','Account','Domain','Source IP','Logon Type')
 $siHdr   = New-HeaderRow @('Time','Service','Image Path','Account','Start Type')
-$weHdr   = New-HeaderRow @('Time','Level','Source','ID','Message')
+$weHdr   = New-HeaderRow @('Time','Level','Source','ID','RecordID','Message')
 $netHdr  = New-HeaderRow @('Process','PID','Local','Remote','State')
 $uHdr    = New-HeaderRow @('Name','Enabled','Last Logon','PW Set','Description')
 $asHdr   = New-HeaderRow @('Location','Name','Command')
@@ -621,6 +625,7 @@ $sb = [System.Text.StringBuilder]::new(65536)
 [void]$sb.AppendLine('table{width:100%;border-collapse:collapse;font-size:13px}')
 [void]$sb.AppendLine('th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tert);padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(0,0,0,0.015);position:sticky;top:0}')
 [void]$sb.AppendLine('td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}')
+[void]$sb.AppendLine('td.message-cell{min-width:280px;max-width:none;white-space:normal;overflow:visible}td.message-cell summary{cursor:pointer;color:var(--accent)}.event-message{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px;max-height:420px;overflow:auto} @media print{td.message-cell details>.event-message{display:block!important;max-height:none}}')
 [void]$sb.AppendLine('tr:last-child td{border-bottom:none}tr:hover td{background:rgba(0,122,255,0.03)}')
 [void]$sb.AppendLine('td.empty{text-align:center;color:var(--text-tert);padding:32px;font-style:italic}')
 [void]$sb.AppendLine('.table-scroll{max-height:420px;overflow-y:auto}')
@@ -688,7 +693,7 @@ $sb = [System.Text.StringBuilder]::new(65536)
 [void]$sb.AppendLine('<div class="table-scroll"><table>' + $flHdr + $failedLoginRows + '</table></div></div>')
 [void]$sb.AppendLine('<div class="card" style="margin-bottom:16px"><div class="card-inner" style="padding-bottom:12px"><h3 style="font-size:15px;font-weight:600;margin-bottom:4px">New Service Installs</h3><p style="font-size:12px;color:var(--text-tert)">Event ID 7045</p></div>')
 [void]$sb.AppendLine('<div class="table-scroll"><table>' + $siHdr + $serviceRows + '</table></div></div>')
-[void]$sb.AppendLine('<div class="card"><div class="card-inner" style="padding-bottom:12px"><h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Warnings &amp; Errors</h3><p style="font-size:12px;color:var(--text-tert)">System log: Critical, Error, Warning</p></div>')
+[void]$sb.AppendLine('<div class="card"><div class="card-inner" style="padding-bottom:12px"><h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Windows-Systemereignisse</h3><p style="font-size:12px;color:var(--text-sec)">Historische Eintraege aus dem Windows-Systemprotokoll (Critical, Error, Warning). Die Windows-Stufe allein nennt keine Ursache und belegt keinen Fehler des Dashboards. Meldung anklicken, um den vollstaendigen Text zu lesen. Fehler bei der Datenerfassung stehen separat unter Collection issues.</p></div>')
 [void]$sb.AppendLine('<div class="table-scroll"><table>' + $weHdr + $warnErrorRows + '</table></div></div></div>')
 
 # NETWORK
