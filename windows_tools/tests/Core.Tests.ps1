@@ -113,7 +113,7 @@ try {
     Assert ($caught -and $calls.Exec -eq 0) 'Unsigned uninstallers must not execute'
 
     # Synthetic Windows providers: no host diagnosis or system changes in this suite.
-    $global:ToolkitDiagnosticTestState = @{ Cim=@{}; Processes=0; NoEvents=$false }
+    $global:ToolkitDiagnosticTestState = @{ Cim=@{}; Processes=0; NoEvents=$false; SystemEvents=@() }
     function Get-CimInstance {
         param($ClassName,$Filter)
         $global:ToolkitDiagnosticTestState.Cim[$ClassName]++
@@ -136,6 +136,7 @@ try {
             Write-Error 'No matching events' -ErrorId 'NoMatchingEventsFound,Microsoft.PowerShell.Commands.GetWinEventCommand' -ErrorAction Stop
         }
         if ($FilterHashtable.LogName -eq 'Security') { throw 'Security log access denied' }
+        if ($FilterHashtable.Level) { $global:ToolkitDiagnosticTestState.SystemEvents }
     }
     function Get-NetTCPConnection {
         param($State,$ErrorAction)
@@ -163,6 +164,16 @@ try {
     Assert ($data.Html.Contains('stroke-dasharray="62.8 251.2"')) 'SVG numbers must use invariant culture'
     Assert ($data.Html.Contains('Security log access denied')) 'HTML report must include collection failures'
     Assert ($data.SystemEvents.Count -eq 0 -and $data.FailedLogins.Count -eq 0) 'Empty event results must not count a null record'
+    $message = ('Windows event detail ' * 20) + "`r`n<script>untrusted</script> END-OF-EVENT"
+    $global:ToolkitDiagnosticTestState.SystemEvents = @([pscustomobject]@{
+        TimeCreated=[datetime]'2026-10-25T11:07:50'; Level=2; ProviderName='Microsoft-Windows-DNS-Client'; Id=1012; RecordId=987; Message=$message
+    })
+    $withEvents = & (Join-Path $root 'diagnostic/Collect-Diagnostics.ps1')
+    Assert ($withEvents.SystemEvents[0].Message -eq $message) 'Event collection must retain complete multiline messages'
+    Assert ($withEvents.SystemEvents[0].RecordID -eq 987 -and $withEvents.SystemEvents[0].Time -eq '25.10.2026 11:07:50') 'Event records must preserve year and record identity'
+    Assert ($withEvents.Html.Contains('<details><summary>') -and $withEvents.Html.Contains('END-OF-EVENT')) 'HTML event text must be expandable without truncation'
+    Assert ($withEvents.Html.Contains('&lt;script&gt;untrusted&lt;/script&gt;') -and -not $withEvents.Html.Contains('<script>untrusted</script>')) 'Event messages must remain escaped in expandable details'
+    Assert ($withEvents.Html.Contains('Windows-Systemereignisse') -and $withEvents.Errors.Count -eq 1) 'Windows events must remain separate from collection failures'
     $global:ToolkitDiagnosticTestState.NoEvents = $true
     $empty = & (Join-Path $root 'diagnostic/Collect-Diagnostics.ps1') -NoReport
     Assert (@($empty.Errors | Where-Object Section -like '*Logins*').Count -eq 0) 'NoMatchingEventsFound is an empty result, not an access failure'

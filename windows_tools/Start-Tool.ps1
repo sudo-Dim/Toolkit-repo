@@ -35,6 +35,35 @@ function Set-Grid($Grid, $Rows) {
     }
     $Grid.DataSource = $table
 }
+function Update-SystemEventDetails($Grid) {
+    if (-not $Grid.CurrentRow) { return }
+    $row = $Grid.CurrentRow
+    $Grid.Tag.Text = 'Zeit: ' + $row.Cells['Time'].Value + "`r`nQuelle: " + $row.Cells['Source'].Value +
+        "`r`nEreignis-ID: " + $row.Cells['ID'].Value + ' / Datensatz: ' + $row.Cells['RecordID'].Value +
+        "`r`nWindows-Stufe: " + $row.Cells['Level'].Value + "`r`n`r`n" + $row.Cells['Message'].Value
+}
+function Add-SystemEventView($Page, $Grid) {
+    $panel = [Windows.Forms.TableLayoutPanel]::new()
+    $panel.Dock = 'Fill'; $panel.ColumnCount = 1; $panel.RowCount = 3
+    [void]$panel.RowStyles.Add([Windows.Forms.RowStyle]::new('AutoSize'))
+    [void]$panel.RowStyles.Add([Windows.Forms.RowStyle]::new('Percent',60))
+    [void]$panel.RowStyles.Add([Windows.Forms.RowStyle]::new('Percent',40))
+    $note = [Windows.Forms.Label]::new(); $note.AutoSize = $true
+    $note.MaximumSize = [Drawing.Size]::new(1000,0); $note.Padding = [Windows.Forms.Padding]::new(8)
+    $note.Text = 'Historische Windows-Ereignisse, keine Fehlerliste der App. Die Windows-Stufe allein nennt keine Ursache. Zeile auswaehlen: vollstaendiger Text unten. Erfassungsfehler stehen im eigenen Reiter.'
+    $text = [Windows.Forms.TextBox]::new(); $text.Multiline = $true; $text.ReadOnly = $true
+    $text.Dock = 'Fill'; $text.ScrollBars = 'Vertical'; $text.WordWrap = $true
+    $text.Text = 'Ein Windows-Ereignis auswaehlen.'
+    $Grid.MultiSelect = $false; $Grid.Tag = $text
+    $Grid.Add_SelectionChanged({
+        param($sender,$eventArgs)
+        Update-SystemEventDetails $sender
+    })
+    if ($Grid.Columns.Contains('Message')) { $Grid.Columns['Message'].AutoSizeMode = 'None'; $Grid.Columns['Message'].Width = 350 }
+    $panel.Controls.Add($note,0,0); $panel.Controls.Add($Grid,0,1); $panel.Controls.Add($text,0,2)
+    $Page.Controls.Add($panel)
+    Update-SystemEventDetails $Grid
+}
 function Confirm-Selection([string[]]$Lines) {
     $review = [Windows.Forms.Form]::new()
     $review.Text = 'Auswahl pruefen'; $review.StartPosition = 'CenterParent'
@@ -83,7 +112,9 @@ function Show-Diagnostic($Data) {
     }
     foreach ($name in $sections.Keys) {
         $page = [Windows.Forms.TabPage]::new($name)
-        $grid = New-Grid; Set-Grid $grid $sections[$name]; $page.Controls.Add($grid)
+        $grid = New-Grid; Set-Grid $grid $sections[$name]
+        if ($name -eq 'Systemereignisse') { Add-SystemEventView $page $grid }
+        else { $page.Controls.Add($grid) }
         $tabs.TabPages.Add($page)
     }
     $status.Text = 'Erfasst: ' + $Data.ProcessCount + ' Prozesse; ' + @($Data.Errors).Count + ' Erfassungsfehler. Nicht lesbare Werte sind unbekannt.'
@@ -213,8 +244,16 @@ $timer.Add_Tick({
                 Set-Grid $resultsGrid @([pscustomobject]@{ Name='Smoke'; Status='OK' })
                 if ($resultsGrid.DataSource.Rows.Count -ne 1) { throw 'Grid data binding failed' }
                 if ($Tool -eq 'Diagnostic') {
-                    Show-Diagnostic ([pscustomobject]@{ System=[pscustomobject]@{OS='Test'}; Hardware=[pscustomobject]@{CPUName='Test';Disks=@()}; Errors=@(); ProcessCount=0 })
+                    $message = ('Full event text ' * 20) + "`r`nEND-OF-EVENT"
+                    $event = [pscustomobject]@{Time='25.10.2026 11:07:50';Level='Error';Source='Test';ID=1012;RecordID=123;Message=$message}
+                    Show-Diagnostic ([pscustomobject]@{ System=[pscustomobject]@{OS='Test'}; Hardware=[pscustomobject]@{CPUName='Test';Disks=@()}; SystemEvents=@($event); Errors=@(); ProcessCount=0 })
                     if ($tabs.TabPages.Count -ne 15) { throw 'Diagnostic tabs missing' }
+                    $tabs.SelectedIndex = 9
+                    $eventPanel = $tabs.TabPages[9].Controls[0]
+                    $eventGrid = $eventPanel.GetControlFromPosition(0,1)
+                    $eventGrid.CurrentCell = $eventGrid.Rows[0].Cells[0]
+                    Update-SystemEventDetails $eventGrid
+                    if (-not $eventGrid.Tag.Text.Contains('END-OF-EVENT')) { throw 'Full Windows event message missing in GUI' }
                 }
                 $state.SmokeDone = $true
             }

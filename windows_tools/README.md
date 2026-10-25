@@ -49,6 +49,13 @@ $data = & ./diagnostic/Collect-Diagnostics.ps1 -OutputPath ./report.html
 $data.Errors
 ```
 
+Windows-Systemereignisse sind historische Meldungen des Betriebssystems. Die
+Stufe Critical/Error/Warning stammt aus Windows und belegt weder eine bestimmte
+Ursache noch einen Fehler des Dashboards. Erfassungsfehler stehen separat.
+Im Reiter Systemereignisse zeigt die ausgewaehlte Zeile unten den vollstaendigen,
+kopierbaren Meldungstext. Im HTML-Export laesst sich jede Meldung aufklappen.
+Datum mit Jahr und RecordID helfen beim Wiederfinden in der Ereignisanzeige.
+
 ## Debloat
 
 1. Umfang waehlen und **Erfassen** klicken. Es wird dabei nichts deinstalliert.
