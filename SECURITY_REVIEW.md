@@ -70,6 +70,11 @@ Benutzerkonto oder Administratorrechte bereits kontrolliert, liegt außerhalb
 jeder hier behaupteten Schutzgrenze. Externe Antworten, Drittanbieterprogramme,
 Windows und Bibliotheken bleiben zusätzliche Angriffsflächen.
 
+Die veröffentlichten EXEs sind derzeit nicht Authenticode-signiert. Windows kann
+deshalb eine Herausgeber-/SmartScreen-Warnung anzeigen. Die heruntergeladenen
+ZIPs wurden gegen die von GitHub angegebenen SHA-256-Prüfsummen geprüft; das
+ersetzt keine Herausgebersignatur.
+
 ## Nachweise
 
 - Regressionstests unter tests/test_security.py: lokale Webzugriffe, Token,
@@ -81,3 +86,10 @@ Windows und Bibliotheken bleiben zusätzliche Angriffsflächen.
   bekannten Schwachstellen. Desktop-Versionen wurden daraufhin festgeschrieben.
   Das ist kein Beweis, dass ein Paket frei von unbekannten Fehlern oder Malware ist.
 - Windows-Workflows prüfen die echten EXEs vor einer Veröffentlichung.
+- Veröffentlichung vom 25.10.2026: 40 Python-, 9 JavaScript- und 36 Windows-
+  Kernprüfungen bestanden, anschließend alle drei EXE-Starttests. Die öffentlichen
+  ZIPs wurden erneut heruntergeladen: OSINT enthält genau EXE, START.bat, Hinweise
+  und eine leere Beispielkonfiguration; die beiden Windows-Tools jeweils eine EXE.
+  Web-/CLI-/ML-Pakete fehlen im OSINT-Bundle; alle 594 Telefon-Metadatenmodule und
+  84 DNS-Record-Module sind enthalten. Die eingebetteten Windows-Skripte entsprechen
+  dem Quellcode, abgesehen von den plattformüblichen Zeilenenden.
