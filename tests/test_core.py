@@ -117,8 +117,8 @@ class ReporterTests(unittest.TestCase):
             OSINTResult("test", "example", "test", ResultSeverity.INFO, "Result",
                         {"formats": {"count": 0, "valid": False, "nested": {"a": "b"}}}),
         ], errors=["Source <unavailable>"])]
-        txt = Path(self.reporter.export_txt(self.scan)).read_text()
-        html = Path(self.reporter.export_html(self.scan)).read_text()
+        txt = Path(self.reporter.export_txt(self.scan)).read_text(encoding="utf-8")
+        html = Path(self.reporter.export_html(self.scan)).read_text(encoding="utf-8")
         self.assertIn("formats", txt)
         self.assertIn('"valid": false', txt)
         self.assertIn("Source &lt;unavailable&gt;", html)
@@ -132,7 +132,7 @@ class ReporterTests(unittest.TestCase):
             OSINTResult("test", "example", "test", ResultSeverity.INFO, "Good link", {},
                         url="https://example.com/?q=\"quoted\""),
         ])]
-        html = Path(self.reporter.export_html(self.scan)).read_text()
+        html = Path(self.reporter.export_html(self.scan)).read_text(encoding="utf-8")
         self.assertNotIn('href="javascript:', html)
         self.assertIn('href="https://example.com/?q=&quot;quoted&quot;"', html)
 

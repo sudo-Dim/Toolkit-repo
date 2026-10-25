@@ -2,6 +2,7 @@ name: Portable Windows utilities
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths: ['windows_tools/**', '.github/workflows/windows-tools.yml']
   pull_request:
     paths: ['windows_tools/**', '.github/workflows/windows-tools.yml']

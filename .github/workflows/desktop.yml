@@ -3,6 +3,7 @@ name: Portable Windows desktop
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths: ['osint_tool/**', 'tests/**', '.github/workflows/desktop.yml']
   pull_request:
     paths: ['osint_tool/**', 'tests/**', '.github/workflows/desktop.yml']
