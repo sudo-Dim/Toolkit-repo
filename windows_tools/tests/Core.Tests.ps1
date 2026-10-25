@@ -34,7 +34,7 @@ function Get-ItemProperty {
     param($Path,$LiteralPath,$ErrorAction)
     $script:calls.Registry++
     if ($Path -like '*Uninstall*') { [pscustomobject]@{ DisplayName='McAfee'; PSPath='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee' } }
-    elseif ($LiteralPath -eq 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee') { [pscustomobject]@{ UninstallString=('"' + $script:fixtureExe + '" /remove'); QuietUninstallString='' } }
+    elseif ($LiteralPath -eq 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee') { $script:fixtureUninstall }
     else { throw 'Access denied' }
 }
 function Remove-AppxPackage {
@@ -86,24 +86,73 @@ try {
     $calls.RemoveProvisioned = 0
     $result = @(Invoke-DebloatPlan -Selection @($selection[2]) -NoRestorePoint -LogPath $log -Confirm:$false)
     Assert ($result[0].Status -eq 'Error' -and $calls.RemoveProvisioned -eq 0) 'Provisioning must require all-user scope'
-    function Start-Process {
-        param($FilePath,$ArgumentList,[switch]$Wait,[switch]$PassThru,$ErrorAction)
-        $script:executed = @($FilePath,$ArgumentList)
-        $script:calls.Exec++
-        [pscustomobject]@{ ExitCode=$script:exitCode }
+    # Real harmless child processes verify stream handling, exit codes and hidden
+    # Windows startup. No installer is executed by these tests.
+    $childHost = (Get-Process -Id $PID).Path
+    function Invoke-FixtureProcess([string]$Code) {
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Code))
+        Invoke-CheckedProcess $script:childHost ('-NoProfile -NonInteractive -EncodedCommand ' + $encoded)
     }
-    $exitCode = 5; $caught = $false
-    try { Invoke-CheckedProcess 'test.exe' '' } catch { $caught = $true }
-    Assert $caught 'Nonzero installer exit must fail'
-    $exitCode = 3010; $script:RestartNeeded = $false
-    Invoke-CheckedProcess 'test.exe' ''
-    Assert $script:RestartNeeded 'Installer reboot result must be retained'
-    $exitCode = 0
+    $failure = ''
+    try { Invoke-FixtureProcess "[Console]::Out.Write(('x' * 131072)); [Console]::Error.Write(('y' * 131072) + 'failure-detail'); exit 5" }
+    catch { $failure = $_.Exception.Message }
+    Assert ($failure -like '*Exit code 5:*' -and $failure -like '*failure-detail*' -and $failure.Length -lt 2500) 'Verbose failures must not deadlock; retain exit code and bounded diagnostics'
+    Invoke-FixtureProcess 'if ([Console]::In.ReadToEnd().Trim().Length) { throw "Unexpected keyboard input" }; exit 0'
+    Assert $true 'Background processes must finish without keyboard input'
+    if ($env:OS -eq 'Windows_NT') {
+        $script:RestartNeeded = $false
+        Invoke-FixtureProcess 'exit 3010'
+        Assert $script:RestartNeeded 'Installer reboot result must be retained'
+        Invoke-FixtureProcess @'
+Add-Type 'using System; using System.Runtime.InteropServices; public static class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window); }'
+if ([ConsoleProbe]::IsWindowVisible([ConsoleProbe]::GetConsoleWindow())) { throw 'Visible helper console' }
+'@
+        Assert $true 'Windows helper console must not be visible'
+        $childScript = Join-Path $temp 'child.ps1'
+        $marker = Join-Path $temp 'child-finished'
+        [IO.File]::WriteAllText($childScript, ('Start-Sleep -Milliseconds 800; [IO.File]::WriteAllText("' + $marker + '","done")'))
+        Invoke-FixtureProcess ('Start-Process -FilePath "' + $childHost + '" -ArgumentList ''-NoProfile -NonInteractive -File "' + $childScript + '"'' -WindowStyle Hidden')
+        Assert ([IO.File]::Exists($marker)) 'Installer descendants must finish before reporting completion'
+    }
+    function Invoke-CheckedProcess {
+        param($FilePath,$Arguments)
+        $script:executed = @($FilePath,$Arguments)
+        $script:calls.Exec++
+    }
+    function Start-Process { throw 'Unexpected external UI launch' }
     $fixtureExe = if ($env:OS -eq 'Windows_NT') { 'C:\Program Files\Vendor\uninstall.exe' } else { '/trusted/uninstall.exe' }
+    $fixtureUninstall = [pscustomobject]@{ UninstallString=('"' + $fixtureExe + '" /remove'); QuietUninstallString=('"' + $fixtureExe + '" /remove /quiet') }
     $fixtureSignature = 'Valid'
     function Get-AuthenticodeSignature { param($LiteralPath) [pscustomobject]@{Status=$script:fixtureSignature} }
     Invoke-ClassicUninstall 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee'
-    Assert ($executed[0] -eq $fixtureExe -and $executed[1] -eq '/remove') 'Quoted uninstall paths must retain exact arguments without shell execution'
+    Assert ($executed[0] -eq $fixtureExe -and $executed[1] -eq '/remove /quiet') 'Registered quiet command must retain exact path and arguments'
+
+    $classic = [pscustomobject]@{Kind='Classic';Name='Interactive vendor';Id='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee'}
+    $fixtureUninstall.QuietUninstallString = ' '; $calls.Exec = 0; $calls.Remove = 0
+    $result = @(Invoke-DebloatPlan -Selection @($classic,$selection[0]) -NoRestorePoint -LogPath $log -Confirm:$false)
+    Assert ($calls.Exec -eq 0 -and $result[0].Status -eq 'Skipped' -and $result[0].Detail -like '*Deinstallationsmodus*') 'Interactive-only uninstallers must be skipped with an explanation'
+    Assert ($calls.Remove -eq 1 -and $result[1].Status -eq 'Success') 'Skipped interactive actions must not block unrelated selected actions'
+    $saved = Get-Content -LiteralPath $log -Raw | ConvertFrom-Json
+    Assert ($saved.Results[0].Status -eq 'Skipped') 'Skipped actions must remain visible in the run log'
+    $result = @(Invoke-DebloatPlan -Options @('DefaultBrowser') -NoRestorePoint -LogPath $log -Confirm:$false)
+    Assert ($result[0].Status -eq 'Skipped' -and $result[0].Detail -like '*Standardbrowser*') 'Legacy browser options must not open Settings'
+    $fixtureUninstall.UninstallString = 'MsiExec.exe /I{12345678-1234-1234-1234-123456789ABC}'
+    $previousRoot = $env:SystemRoot
+    try {
+        if (-not $env:SystemRoot) { $env:SystemRoot = $temp }
+        Invoke-ClassicUninstall $classic.Id
+        Assert ($executed[0] -eq (Join-Path $env:SystemRoot 'System32\msiexec.exe') -and $executed[1] -eq '/x {12345678-1234-1234-1234-123456789ABC} /qn /norestart') 'MSI fallback must use the system installer without UI or restart'
+        $fixtureUninstall.UninstallString = 'MsiExec.exe /I{------------------------------------}'; $calls.Exec = 0; $caught = $false
+        try { Invoke-ClassicUninstall $classic.Id } catch { $caught = $true }
+        Assert ($caught -and $calls.Exec -eq 0) 'Invalid MSI product codes must never execute'
+    } finally { $env:SystemRoot = $previousRoot }
+    foreach ($launcher in @('explorer.exe','control.exe','SystemSettings.exe')) {
+        $fixtureUninstall.QuietUninstallString = '"' + (Join-Path $temp $launcher) + '"'
+        $caught = $false; $calls.Exec = 0
+        try { Invoke-ClassicUninstall $classic.Id } catch { $caught = $true }
+        Assert ($caught -and $calls.Exec -eq 0) 'Shell and Settings launchers must never be used as uninstallers'
+    }
+    $fixtureUninstall.QuietUninstallString = '"' + $fixtureExe + '" /remove /quiet'
 
     $caught = $false
     try { Invoke-ClassicUninstall 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\McAfee' } catch { $caught = $true }
