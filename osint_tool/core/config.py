@@ -42,7 +42,7 @@ def load_data(filename: str, key: Optional[str] = None, default=None):
 class AppConfig:
     """Hauptkonfiguration der Anwendung."""
     app_name: str = "OSINT Recon Tool"
-    version: str = "1.3.0"
+    version: str = "1.3.1"
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "

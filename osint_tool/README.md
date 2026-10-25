@@ -1,4 +1,4 @@
-# 🔍 OSINT Recon Tool v1.3
+# 🔍 OSINT Recon Tool v1.3.1
 
 Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
@@ -35,8 +35,14 @@ Ein modulares Open Source Intelligence (OSINT) Tool für Cybersecurity-Bildung.
 
 - Öffentliche Profile sind von Personenidentität zu unterscheiden. Derselbe Username
   auf zwei Seiten kann zwei verschiedenen Personen gehören. Namenstreffer bleiben Hinweise.
+- Standardmäßig zeigt **Prüfergebnisse** nur Analysen/Abfragen, keine generierten
+  Suchmaschinenlinks. Diese Links stehen unter **Manuelle Quellen** und werden nicht
+  automatisch abgefragt. Die Zusammenfassung zählt sie getrennt von Prüfergebnissen.
 - Die Desktop-Filter **Unbestätigt** und **Manuelle Quellen** trennen Hinweise von
   belegten Treffern. Details nennen den Grund und, bei Profilen, den Prüf-Endpunkt.
+- E-Mail-Suchen fragen zusätzlich öffentliche GitLab- und ORCID-Profile ab,
+  parallel zur GitHub-Prüfung. Nur die exakt veröffentlichte E-Mail-Adresse gilt
+  als Profilbezug; private/fehlende E-Mail-Felder und reine Suchtreffer bleiben unbestätigt.
 - Neue Plattformen: Codeberg, Gitea.com, Debian Salsa, GNOME GitLab, KDE Invent,
   Codewars, Codeforces, Scratch, Discogs, iNaturalist, Open Library, Launchpad,
   Lemmy.world, Lemmy.ml, OpenStreetMap, MusicBrainz, AtCoder und BoardGameGeek.

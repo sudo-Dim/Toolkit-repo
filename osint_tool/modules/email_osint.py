@@ -254,6 +254,50 @@ class EmailModule(BaseModule):
             self.add_error(f"GitHub-User: {exc}")
         return out
 
+    def _check_public_email_profiles(self, provider: str, email: str, session) -> dict:
+        """Read public profiles only; exact published emails are required for a hit."""
+        result = {'source': provider, 'profiles': [], 'verdict': 'uncertain',
+                  'reason': 'Kein Profil mit exakt veröffentlichter E-Mail bestätigt'}
+        try:
+            if provider == 'GitLab':
+                response = session.get('https://gitlab.com/api/v4/users',
+                    params={'search': email, 'per_page': 3}, timeout=self._acct_timeout)
+                if response.status_code != 200 or not isinstance(response.json(), list):
+                    return result
+                candidates = response.json()
+                ids = [user['id'] for user in candidates if isinstance(user, dict) and type(user.get('id')) is int][:3]
+                def fetch_profile(user_id):
+                    response = session.get(f'https://gitlab.com/api/v4/users/{user_id}', timeout=self._acct_timeout)
+                    return response.json() if response.status_code == 200 else {}
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    profiles = list(pool.map(fetch_profile, ids))
+                for profile in profiles:
+                    address = profile.get('public_email') if isinstance(profile, dict) else None
+                    if (isinstance(address, str) and address.casefold() == email.casefold()
+                            and profile.get('username') and profile.get('web_url')):
+                        result['profiles'].append({'username': profile['username'], 'url': profile['web_url'],
+                                                   'public_email': address})
+            elif provider == 'ORCID':
+                query = 'email:"' + email.replace('\\', '\\\\').replace('"', '\\"') + '"'
+                response = session.get('https://pub.orcid.org/v3.0/expanded-search/',
+                    params={'q': query, 'rows': 5}, headers={'Accept': 'application/json'}, timeout=self._acct_timeout)
+                if response.status_code != 200:
+                    return result
+                for profile in (response.json().get('expanded-result') or [])[:5]:
+                    emails = profile.get('email') or []
+                    if isinstance(emails, str):
+                        emails = [emails]
+                    if (profile.get('orcid-id') and any(isinstance(address, str) and address.casefold() == email.casefold()
+                                                       for address in emails)):
+                        result['profiles'].append({'orcid': profile['orcid-id'],
+                            'name': f"{profile.get('given-names', '')} {profile.get('family-names', '')}".strip(),
+                            'url': f"https://orcid.org/{profile['orcid-id']}", 'public_email': email})
+            if result['profiles']:
+                result.update(verdict='found', reason='Öffentliches Profil enthält die exakte E-Mail-Adresse')
+        except Exception as exc:
+            result['reason'] = self.redact(str(exc))
+        return result
+
     # ── Account-Existenz-Engine (datengetrieben) ───────────────
     @staticmethod
     def _json_path(obj, path):
@@ -676,7 +720,12 @@ class EmailModule(BaseModule):
         tick("Gravatar geprüft")
 
         # 5. GitHub
-        gh = self._check_github(email_l, session)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            github_future = pool.submit(self._check_github, email_l, session)
+            public_futures = [pool.submit(self._check_public_email_profiles, provider, email_l, session)
+                              for provider in ('GitLab', 'ORCID')]
+            gh = github_future.result()
+            public_profiles = [future.result() for future in public_futures]
         if gh.get("commits") or gh.get("user") or gh.get('candidate'):
             c = gh.get("commits") or {}
             u = gh.get("user") or {}
@@ -691,7 +740,16 @@ class EmailModule(BaseModule):
                     'candidate': gh.get('candidate'), 'verdict': 'found' if u else 'candidate',
                     'reason': 'Exakte öffentliche E-Mail' if u else 'Suchtreffer/Commit-Metadaten sind kein Kontonachweis'}.items() if v},
                 url=u.get("profile") or c.get("sample_commit")))
-        tick("GitHub geprüft")
+        for source in public_profiles:
+            confirmed = source['verdict'] == 'found'
+            self.add_result(OSINTResult(
+                source=source['source'], module=self.name, category='Öffentliche Profile',
+                severity=ResultSeverity.FOUND if confirmed else ResultSeverity.INFO,
+                title=f"{source['source']}: öffentliches Profil mit exakter E-Mail" if confirmed else
+                      f"{source['source']}: kein öffentlicher E-Mail-Profilbezug bestätigt",
+                data={'profiles': source['profiles'], 'verdict': source['verdict'], 'reason': source['reason']},
+                url=source['profiles'][0]['url'] if confirmed else None))
+        tick("GitHub, GitLab und ORCID geprüft")
 
         # 6. Account-Existenz-Checks (datengetrieben + Token-Flows, parallel)
         self.report_progress(step[0], total_steps, "Prüfe Account-Existenz auf vielen Seiten...")
@@ -803,7 +861,9 @@ class EmailModule(BaseModule):
             self.add_result(OSINTResult(
                 source=dork["name"], module=self.name,
                 category=("Such-Link · " + dork.get("category", "")).strip(" ·"),
-                severity=ResultSeverity.INFO, title=dork["name"], data={'manual_check': True, 'verdict': 'manual'},
+                severity=ResultSeverity.INFO, title=dork["name"],
+                data={'manual_check': True, 'verdict': 'manual',
+                      'reason': 'Generierter Suchlink; diese Suchmaschine wurde nicht abgefragt.'},
                 url=self._tmpl(dork["url"], tokens)))
         candidates = []
         for c in (local, local.replace(".", ""), local.split("+")[0], local.split("+")[0].replace(".", "")):

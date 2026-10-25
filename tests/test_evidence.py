@@ -206,6 +206,31 @@ class AccountEvidenceTests(unittest.TestCase):
         self.assertIsNone(result['user'])
         self.assertEqual(result['candidate']['login'], 'someone')
 
+    def test_gitlab_email_search_requires_exact_public_profile_email(self):
+        session = Mock()
+        def serve(url, **kwargs):
+            if url.endswith('/users'):
+                return response(url, '[{"id":123,"username":"example"}]')
+            return response(url, '{"username":"example","web_url":"https://gitlab.com/example","public_email":"other@example.com"}')
+        session.get.side_effect = serve
+        result = self.module._check_public_email_profiles('GitLab', 'test@example.com', session)
+        self.assertEqual(result['verdict'], 'uncertain')
+        session.get.side_effect = [response('https://gitlab.com/api/v4/users', '[{"id":123}]'),
+            response('https://gitlab.com/api/v4/users/123', '{"username":"example","web_url":"https://gitlab.com/example","public_email":"test@example.com"}')]
+        result = self.module._check_public_email_profiles('GitLab', 'test@example.com', session)
+        self.assertEqual(result['verdict'], 'found')
+
+    def test_orcid_requires_visible_exact_email_and_successful_response(self):
+        session = Mock()
+        payload = {'expanded-result': [{'orcid-id': '0000-0000-0000-0000', 'given-names': 'Example', 'email': ['other@example.com']}]}
+        session.get.return_value = response('https://pub.orcid.org', json.dumps(payload))
+        self.assertEqual(self.module._check_public_email_profiles('ORCID', 'test@example.com', session)['verdict'], 'uncertain')
+        payload['expanded-result'][0]['email'] = ['test@example.com']
+        session.get.return_value = response('https://pub.orcid.org', json.dumps(payload))
+        self.assertEqual(self.module._check_public_email_profiles('ORCID', 'test@example.com', session)['verdict'], 'found')
+        session.get.return_value = response('https://pub.orcid.org', json.dumps(payload), 429)
+        self.assertEqual(self.module._check_public_email_profiles('ORCID', 'test@example.com', session)['verdict'], 'uncertain')
+
     def test_name_matches_are_candidates_not_verified_people(self):
         module = NameModule()
         with patch.object(module, '_session'), patch.object(module, '_orcid', return_value=[{'url': 'https://orcid.org/test'}]), \
