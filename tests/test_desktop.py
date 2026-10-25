@@ -132,6 +132,27 @@ class DesktopWidgetTests(unittest.TestCase):
         self.app.close()
         self.app.runner.cancel.assert_called_once()
 
+    def test_default_view_hides_generated_email_search_links(self):
+        from osint_tool.core.engine import ScanJob, ScanResult
+        from osint_tool.modules.base import ModuleReport, OSINTResult, ResultSeverity
+        result = ScanResult(ScanJob('test@example.com', 'email'), reports=[
+            ModuleReport('email', 'test@example.com', 'email', results=[
+                OSINTResult('Provider', 'email', 'Account', ResultSeverity.INFO, 'Nicht prüfbar', {'verdict': 'uncertain'}),
+                OSINTResult('Google', 'email', 'Such-Link', ResultSeverity.INFO, 'Generierter Link', {'manual_check': True, 'verdict': 'manual'}, 'https://www.google.com/search?q=test'),
+            ])])
+        self.app.show_result(result)
+        self.assertEqual(self.app.filter.get(), 'Prüfergebnisse')
+        rows = self.app.tree.get_children()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(self.app.tree.item(rows[0], 'values')[1], 'Provider')
+        self.assertIn('0 Treffer', self.app.summary.get())
+        self.assertIn('1 manuelle Quellen', self.app.summary.get())
+        self.app.filter.set('Manuelle Quellen')
+        self.app.render_rows()
+        rows = self.app.tree.get_children()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(self.app.tree.item(rows[0], 'values')[0:2], ('Manuell', 'Google'))
+
     def test_results_filter_details_and_export(self):
         from osint_tool.core.engine import ScanJob, ScanResult
         from osint_tool.modules.base import ModuleReport, OSINTResult, ResultSeverity

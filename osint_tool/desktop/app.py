@@ -24,13 +24,15 @@ LABELS = {"username": "Username", "email": "E-Mail", "phone": "Telefon",
           "domain": "Domain", "ip": "IP-Adresse", "name": "Name", "image": "Bild"}
 SEVERITIES = {"found": "Treffer", "warning": "Warnung", "critical": "Kritisch",
               "info": "Info", "not_found": "Kein Treffer"}
-FILTERS = {"Alle Ergebnisse": None, "Treffer": {"found"},
+FILTERS = {"Prüfergebnisse": set(), "Alle Ergebnisse": None, "Treffer": {"found"},
            "Warnungen": {"warning", "critical"}, "Info": {"info"},
            "Nicht gefunden": {"not_found"}, "Unbestätigt": set(), "Manuelle Quellen": set()}
 
 
 def matches_filter(row, name):
     data = row.get('data') or {}
+    if name == 'Prüfergebnisse':
+        return not (data.get('manual_check') or data.get('verdict') == 'manual')
     if name == 'Unbestätigt':
         return data.get('verdict') in ('candidate', 'uncertain')
     if name == 'Manuelle Quellen':
@@ -167,7 +169,7 @@ class DesktopApp:
         results_bar.grid(row=4, column=0, sticky="ew", pady=(0, 10))
         self.summary = tk.StringVar(value="Ergebnisse")
         ttk.Label(results_bar, textvariable=self.summary, style="Summary.TLabel").pack(side="left")
-        self.filter = tk.StringVar(value="Alle Ergebnisse")
+        self.filter = tk.StringVar(value="Prüfergebnisse")
         filter_box = ttk.Combobox(results_bar, textvariable=self.filter, values=list(FILTERS), state="readonly", width=18)
         filter_box.pack(side="right")
         filter_box.bind("<<ComboboxSelected>>", lambda event: self.render_rows())
@@ -303,7 +305,10 @@ class DesktopApp:
             self.rows.extend(report["results"])
             self.rows.extend({"severity": "warning", "source": report["module"], "title": error,
                               "category": "Fehler", "data": {}, "url": None} for error in report["errors"])
-        self.summary.set(f"{summary['total_results']} Ergebnisse · {summary['total_found']} Treffer · {summary['total_errors']} Fehler")
+        manual_count = sum(matches_filter(row, 'Manuelle Quellen') for row in self.rows)
+        self.summary.set(f"{summary['total_results'] - manual_count} Prüfergebnisse · {summary['total_found']} Treffer · {manual_count} manuelle Quellen")
+        if summary['total_errors']:
+            self.summary.set(self.summary.get() + f" · {summary['total_errors']} Fehler")
         self.status.set(f"Abgeschlossen in {result.duration_seconds:.1f} Sekunden")
         self.progress["value"] = 100
         self.render_rows()
