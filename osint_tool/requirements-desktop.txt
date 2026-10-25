@@ -1,0 +1,3 @@
+# Desktop und Terminal: keine Flask-/Web-Abhängigkeit.
+-r requirements-core.txt
+# Tkinter gehört zum offiziellen Python-Installer für Windows.

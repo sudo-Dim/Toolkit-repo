@@ -26,6 +26,8 @@ from concurrent.futures import ThreadPoolExecutor
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
 from ..core.http import build_session, DEFAULT_UA
 from ..core.config import DNS_RECORD_TYPES, DKIM_SELECTORS
+from ..core.inputs import normalize_host
+from ..core.network import public_socket
 
 
 class DomainModule(BaseModule):
@@ -63,8 +65,7 @@ class DomainModule(BaseModule):
 
     @staticmethod
     def _clean_domain(domain: str) -> str:
-        domain = re.sub(r"^https?://", "", domain.strip())
-        return domain.split("/")[0].split("?")[0].lower().strip()
+        return normalize_host(domain)
 
     # ── DNS (dnspython + DoH-Fallback) ─────────────────────────
     def _doh(self, name: str, rtype: str, session) -> List[str]:
@@ -172,18 +173,7 @@ class DomainModule(BaseModule):
                                 "asn_org": conn.get("org")})
         except Exception as exc:
             self.add_error(f"ipwho.is: {exc}")
-        # ip-api Fallback
-        if "country" not in out:
-            try:
-                r = session.get(f"http://ip-api.com/json/{ip}?fields=66846719", timeout=self._timeout)
-                if r.status_code == 200:
-                    d = r.json()
-                    if d.get("status") == "success":
-                        out.update({"country": d.get("country"), "region": d.get("regionName"),
-                                    "city": d.get("city"), "lat": d.get("lat"), "lon": d.get("lon"),
-                                    "isp": d.get("isp"), "org": d.get("org"), "asn": d.get("as")})
-            except Exception:
-                pass
+
         return out
 
     def _internetdb(self, ip: str, session) -> Optional[dict]:
@@ -232,7 +222,7 @@ class DomainModule(BaseModule):
     def _tls(self, domain: str) -> dict:
         try:
             ctx = ssl.create_default_context()
-            with socket.create_connection((domain, 443), timeout=8) as sock:
+            with public_socket(domain, 443, timeout=8) as sock:
                 with ctx.wrap_socket(sock, server_hostname=domain) as ss:
                     cert = ss.getpeercert()
             subject = dict(x[0] for x in cert.get("subject", []))
@@ -343,8 +333,8 @@ class DomainModule(BaseModule):
     # ── Hauptlauf ─────────────────────────────────────────────
     def run(self, input_value: str, input_type: str = "domain") -> ModuleReport:
         start = time.time()
-        is_ip = self._is_ip(input_value.strip())
-        target = input_value.strip() if is_ip else self._clean_domain(input_value)
+        target = self._clean_domain(input_value)
+        is_ip = self._is_ip(target)
         session = self._session()
         step = [0]
 

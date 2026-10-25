@@ -10,8 +10,10 @@ werden hier lazy geladen.
 import os
 import json
 import pathlib
+import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from .paths import application_directory, resource_directory
 
 # ──────────────────────────────────────────────
 # Daten-Verzeichnis & JSON-Loader
@@ -69,30 +71,43 @@ class AppConfig:
     # als manueller Link ausgegeben.
     site_auth: Dict[str, dict] = field(default_factory=dict)
 
-    def load_api_keys(self, config_path: str = "config.json"):
+    def load_api_keys(self, config_path: Optional[str] = None):
         """Lädt API-Keys & Site-Logins aus config.json / config.local.json
         oder Umgebungsvariablen.
 
         Reihenfolge (spätere überschreiben frühere):
-        1. config.json (im Programmordner)
-        2. config.local.json (gitignored, für echte Keys/Logins)
-        3. Umgebungsvariablen
+        1. Eingebettete config.json, dann config.json am externen Speicherort
+        2. config.local.json (Quellcode: Programm-/Arbeitsordner; EXE: EXE-Ordner)
+        3. Optional explizit angegebene Konfiguration und benachbarte lokale Datei
+        4. Umgebungsvariablen
         """
-        here = pathlib.Path(__file__).resolve().parent.parent
+        here = resource_directory()
+        # Die portable EXE darf nicht vom Arbeitsverzeichnis einer Verknüpfung
+        # abhängen. Benutzer-Konfiguration liegt neben der EXE, nie in _MEIPASS.
+        external = application_directory() if getattr(sys, "frozen", False) else pathlib.Path.cwd()
+        candidates = [here / "config.json", external / "config.json"]
+        if not getattr(sys, "frozen", False):
+            candidates.append(here / "config.local.json")
+        candidates.append(external / "config.local.json")
+        if config_path is not None:
+            explicit = pathlib.Path(config_path)
+            candidates.extend([explicit, explicit.with_name("config.local.json")])
 
-        for candidate in (config_path, str(here / "config.json"),
-                          "config.local.json", str(here / "config.local.json")):
+        for candidate in dict.fromkeys(candidates):
             try:
                 if os.path.exists(candidate):
                     with open(candidate, "r", encoding="utf-8") as f:
                         data = json.load(f)
+                        if not isinstance(data, dict):
+                            continue
                         self.api_keys.update(
-                            {k: v for k, v in data.get("api_keys", {}).items() if v}
+                            {k: v for k, v in (data.get("api_keys") or {}).items()
+                             if isinstance(v, str) and v}
                         )
                         for site, auth in (data.get("site_auth") or {}).items():
                             if auth:
                                 self.site_auth[site] = auth
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, AttributeError):
                 continue
 
         # Umgebungsvariablen überschreiben Datei-Werte

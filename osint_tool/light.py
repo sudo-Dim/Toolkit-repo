@@ -281,7 +281,11 @@ def render_results(pal: Palette, result):
 # Scan-Ablauf
 # ══════════════════════════════════════════════════════════════
 def run_once(engine, reporter, pal, value, input_type=None, do_export=False):
-    detected = input_type or engine.detect_input_type(value)
+    try:
+        detected = input_type or engine.detect_input_type(value)
+    except ValueError as exc:
+        print(f"\n  {pal.RED}Fehler: {exc}{pal.RESET}")
+        return None
     modules = [m.name for m in engine.get_modules_for_type(detected)] or [detected]
 
     print(f"\n  {pal.DIM}Erkannt als{pal.RESET} "

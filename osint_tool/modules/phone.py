@@ -12,7 +12,7 @@ from typing import List, Optional
 from urllib.parse import quote
 
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
-from ..core.http import build_session, DEFAULT_UA
+from ..core.http import build_session
 
 # Fallback-Vorwahltabelle (nur falls 'phonenumbers' nicht installiert ist)
 COUNTRY_CODES = {
@@ -206,7 +206,6 @@ class PhoneModule(BaseModule):
     def run(self, input_value: str, input_type: str = "phone") -> ModuleReport:
         start = time.time()
         phone = input_value.strip()
-        session = build_session(user_agent=self.config.user_agent if self.config else DEFAULT_UA)
         steps = 5
         step = [0]
 
@@ -251,7 +250,10 @@ class PhoneModule(BaseModule):
         tick("Reverse-Lookup-Links")
 
         # 4. NumVerify (optional)
-        nv = self._check_numverify(self._normalize(phone), session)
+        nv = None
+        if self.config and self.config.has_key("numverify"):
+            with build_session(user_agent=self.config.user_agent) as session:
+                nv = self._check_numverify(self._normalize(phone), session)
         if nv:
             self.add_result(OSINTResult(
                 source="NumVerify API", module=self.name, category="Carrier",

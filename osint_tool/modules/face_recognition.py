@@ -181,6 +181,9 @@ class FaceModule(BaseModule):
         start = time.time()
         value = input_value.strip()
         is_url = self._is_url(value)
+        # UNC/device paths can authenticate to an SMB server just by testing existence.
+        if not is_url and (value.replace("\\", "/").startswith("//") or value.lower().startswith("file:")):
+            raise ValueError("Nur lokale Bildpfade oder HTTP(S)-Bildlinks sind erlaubt; keine Netzwerk-/Datei-URLs")
         is_file = (not is_url) and os.path.exists(value)
         steps = 4
         step = 0

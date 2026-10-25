@@ -6,6 +6,9 @@ JSON, TXT (plain text), HTML (interaktiver Report).
 
 import json
 import os
+import uuid
+from html import escape
+from urllib.parse import urlsplit
 from datetime import datetime
 from typing import Optional
 
@@ -18,8 +21,8 @@ class Reporter:
     """Exportiert ScanResults in verschiedene Formate."""
 
     def __init__(self, output_dir: str = "results"):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        self.output_dir = os.path.abspath(output_dir)
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def _generate_filename(self, scan_result: ScanResult, extension: str) -> str:
         """Generiert einen eindeutigen Dateinamen."""
@@ -30,7 +33,7 @@ class Reporter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return os.path.join(
             self.output_dir,
-            f"osint_{safe_input}_{timestamp}.{extension}"
+            f"osint_{safe_input}_{timestamp}_{uuid.uuid4().hex}.{extension}"
         )
 
     # ── JSON ────────────────────────────────────
@@ -94,14 +97,20 @@ class Reporter:
 
                 # Daten kompakt darstellen
                 for key, value in result.data.items():
+                    if key.startswith("_"):
+                        continue
                     if isinstance(value, (list, dict)):
-                        if isinstance(value, list) and len(value) > 0:
+                        if isinstance(value, dict) and value:
+                            lines.append(f"      {key}:")
+                            lines.extend(f"        {line}" for line in
+                                         json.dumps(value, ensure_ascii=False, indent=2).splitlines())
+                        elif isinstance(value, list) and len(value) > 0:
                             lines.append(f"      {key}:")
                             for item in value[:10]:
                                 if isinstance(item, dict):
                                     brief = ", ".join(
                                         f"{k}: {v}" for k, v in item.items()
-                                        if v and str(v) != "None"
+                                        if v is not None and str(v) not in ("", "None")
                                     )
                                     lines.append(f"        - {brief}")
                                 else:
@@ -304,11 +313,11 @@ h1::before {{ content: "🔍"; }}
     </div>
 
     <div class="filter-bar">
-        <button class="filter-btn active" onclick="filterResults('all')">Alle</button>
-        <button class="filter-btn" onclick="filterResults('found')">Treffer</button>
-        <button class="filter-btn" onclick="filterResults('warning')">Warnungen</button>
-        <button class="filter-btn" onclick="filterResults('critical')">Kritisch</button>
-        <button class="filter-btn" onclick="filterResults('info')">Info</button>
+        <button class="filter-btn active" onclick="filterResults('all', this)">Alle</button>
+        <button class="filter-btn" onclick="filterResults('found', this)">Treffer</button>
+        <button class="filter-btn" onclick="filterResults('warning', this)">Warnungen</button>
+        <button class="filter-btn" onclick="filterResults('critical', this)">Kritisch</button>
+        <button class="filter-btn" onclick="filterResults('info', this)">Info</button>
     </div>
 """
 
@@ -328,7 +337,7 @@ h1::before {{ content: "🔍"; }}
                 <div class="result-title">{self._escape_html(result.title)}</div>
                 <div class="result-meta">
                     {self._escape_html(result.source)} | {self._escape_html(result.category)}
-                    {f' | <a href="{self._escape_html(result.url)}" target="_blank">Link öffnen ↗</a>' if result.url else ''}
+                    {f' | <a href="{self._escape_html(result.url)}" target="_blank" rel="noopener noreferrer">Link öffnen ↗</a>' if self._safe_url(result.url) else ''}
                 </div>
                 <div class="data-grid">
 """
@@ -346,6 +355,9 @@ h1::before {{ content: "🔍"; }}
             </div>
 """
 
+            for error in report.errors:
+                html += f'<div class="result warning" data-severity="warning"><div class="result-title">Fehler</div>{self._escape_html(error)}</div>\n'
+
             html += """
         </div>
     </div>
@@ -362,9 +374,9 @@ function toggleModule(header) {{
     const body = header.nextElementSibling;
     body.classList.toggle('collapsed');
 }}
-function filterResults(severity) {{
+function filterResults(severity, button) {{
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
+    button.classList.add('active');
     document.querySelectorAll('.result').forEach(r => {{
         if (severity === 'all') {{
             r.style.display = '';
@@ -385,25 +397,29 @@ function filterResults(severity) {{
 
     def export_all(self, scan_result: ScanResult) -> dict:
         """Exportiert in alle Formate und gibt Dateipfade zurück."""
+        stem = os.path.splitext(self._generate_filename(scan_result, "json"))[0]
         return {
-            "json": self.export_json(scan_result),
-            "txt": self.export_txt(scan_result),
-            "html": self.export_html(scan_result),
+            "json": self.export_json(scan_result, stem + ".json"),
+            "txt": self.export_txt(scan_result, stem + ".txt"),
+            "html": self.export_html(scan_result, stem + ".html"),
         }
 
     # ── Hilfsfunktionen ────────────────────────
 
     @staticmethod
     def _escape_html(text: str) -> str:
-        if not text:
-            return ""
-        return (
-            str(text)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-        )
+        return "" if text is None else escape(str(text), quote=True)
+
+    @staticmethod
+    def _safe_url(value) -> bool:
+        if not isinstance(value, str) or any(ord(c) < 32 for c in value):
+            return False
+        try:
+            parsed = urlsplit(value)
+            return bool(parsed.scheme.lower() in ("http", "https") and parsed.hostname
+                        and parsed.username is None and parsed.password is None)
+        except ValueError:
+            return False
 
     def _format_value(self, value) -> str:
         """Formatiert einen Wert für HTML-Anzeige."""
@@ -418,7 +434,7 @@ function filterResults(severity) {{
             for item in value[:15]:
                 if isinstance(item, dict):
                     parts = [f"{k}: {v}" for k, v in item.items()
-                             if v and str(v) != "None"]
+                             if v is not None and str(v) not in ("", "None")]
                     items.append(
                         f'<span class="tag">{self._escape_html(", ".join(parts))}</span>'
                     )
@@ -434,6 +450,6 @@ function filterResults(severity) {{
             if not value:
                 return ""
             parts = [f"{k}: {v}" for k, v in value.items()
-                     if v and str(v) != "None" and not str(k).startswith("_")]
+                     if v is not None and str(v) not in ("", "None") and not str(k).startswith("_")]
             return self._escape_html(", ".join(parts[:5]))
         return self._escape_html(str(value))

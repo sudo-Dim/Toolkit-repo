@@ -18,6 +18,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
+from urllib.parse import quote
 
 from .base import BaseModule, ModuleReport, OSINTResult, ResultSeverity
 from ..core.http import build_session, DEFAULT_UA
@@ -83,8 +84,9 @@ class UsernameModule(BaseModule):
     def _check_platform(self, platform: dict, username: str, session) -> dict:
         name = platform["name"]
         category = platform.get("category", "Other")
-        profile_url = platform["url"].replace("{}", username)
-        probe_url = platform.get("url_probe", platform["url"]).replace("{}", username)
+        encoded = quote(username, safe="")
+        profile_url = platform["url"].replace("{}", encoded)
+        probe_url = platform.get("url_probe", platform["url"]).replace("{}", encoded)
         method = platform.get("request_method", "GET").upper()
         headers = dict(platform.get("request_headers") or {})
         headers.setdefault("User-Agent", self.config.user_agent if self.config else DEFAULT_UA)
@@ -152,7 +154,7 @@ class UsernameModule(BaseModule):
                 title=f"{p['name']}: nur manuell prüfbar (anonym nicht zuverlässig)",
                 data={"reason": p.get("notes", "Seite blockt automatisierte Prüfung / benötigt Login."),
                       "manual_check": True},
-                url=p["url"].replace("{}", username)))
+                url=p["url"].replace("{}", quote(username, safe=""))))
             self.report_progress(done, total, f"{p['name']} (nur Link)")
 
         # Prüfbare Plattformen parallel abfragen
