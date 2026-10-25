@@ -102,7 +102,7 @@ def audit_bundle(executable):
     for required in ("requests", "urllib3", "charset_normalizer", "idna", "certifi", "dns.resolver"):
         if required not in modules:
             raise RuntimeError(f"Fehlende Laufzeit-Abhängigkeit: {required}")
-    if not any(name.endswith("certifi/cacert.pem") for name in archive.toc):
+    if not any(name.replace("\\", "/").endswith("certifi/cacert.pem") for name in archive.toc):
         raise RuntimeError("TLS-Zertifikatsdaten fehlen im Build")
     report = {
         "executable_bytes": executable.stat().st_size,

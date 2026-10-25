@@ -16,7 +16,7 @@ jobs:
       run:
         shell: powershell
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Test Windows PowerShell 5.1 core logic without modifying the host
         run: ./windows_tools/tests/Core.Tests.ps1
       - name: Build using the Windows .NET Framework compiler
@@ -33,7 +33,7 @@ jobs:
           $report = Join-Path $env:RUNNER_TEMP 'diagnostic.html'
           $data = & ./windows_tools/diagnostic/Collect-Diagnostics.ps1 -OutputPath $report
           if (-not $data.System.OS -or -not $data.Hardware.CPUName -or -not (Test-Path $report)) { throw 'Windows collection failed' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Portable-Windows-utilities-x64
           path: dist/windows-tools/*-windows-x64.zip

@@ -58,6 +58,13 @@ Assert ($calls.Provisioned -eq 0) 'Current-user scope must not enumerate provisi
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('ToolkitTests-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temp | Out-Null
 try {
+    if ($env:OS -eq 'Windows_NT') {
+        $protected = Join-Path $temp 'protected'
+        New-DebloatDirectory $protected
+        $acl = Get-Acl -LiteralPath $protected
+        Assert $acl.AreAccessRulesProtected 'Elevated working directories must not inherit user-write access'
+        Assert ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-32-544') 'Elevated directory owner must be Administrators'
+    }
     $selection = @(
         [pscustomobject]@{ Kind='App'; Name='Success'; Id='ok' },
         [pscustomobject]@{ Kind='App'; Name='Failure'; Id='fail' },
@@ -82,6 +89,7 @@ try {
     function Start-Process {
         param($FilePath,$ArgumentList,[switch]$Wait,[switch]$PassThru,$ErrorAction)
         $script:executed = @($FilePath,$ArgumentList)
+        $script:calls.Exec++
         [pscustomobject]@{ ExitCode=$script:exitCode }
     }
     $exitCode = 5; $caught = $false
@@ -92,13 +100,17 @@ try {
     Assert $script:RestartNeeded 'Installer reboot result must be retained'
     $exitCode = 0
     $fixtureExe = if ($env:OS -eq 'Windows_NT') { 'C:\Program Files\Vendor\uninstall.exe' } else { '/trusted/uninstall.exe' }
-    function Get-AuthenticodeSignature { param($LiteralPath) [pscustomobject]@{Status='Valid'} }
+    $fixtureSignature = 'Valid'
+    function Get-AuthenticodeSignature { param($LiteralPath) [pscustomobject]@{Status=$script:fixtureSignature} }
     Invoke-ClassicUninstall 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee'
     Assert ($executed[0] -eq $fixtureExe -and $executed[1] -eq '/remove') 'Quoted uninstall paths must retain exact arguments without shell execution'
 
     $caught = $false
     try { Invoke-ClassicUninstall 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\McAfee' } catch { $caught = $true }
     Assert $caught 'User-writable uninstall entries must never execute elevated'
+    $fixtureSignature = 'NotSigned'; $caught = $false; $calls.Exec = 0
+    try { Invoke-ClassicUninstall 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee' } catch { $caught = $true }
+    Assert ($caught -and $calls.Exec -eq 0) 'Unsigned uninstallers must not execute'
 
     # Synthetic Windows providers: no host diagnosis or system changes in this suite.
     $global:ToolkitDiagnosticTestState = @{ Cim=@{}; Processes=0; NoEvents=$false }
