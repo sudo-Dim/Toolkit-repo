@@ -23,6 +23,18 @@ jobs:
           python-version: '3.12'
       - name: Install desktop build dependencies only
         run: python -m pip install -r osint_tool/requirements-build.txt
+      - name: Run regression and security checks in a separate test environment
+        run: |
+          python -m venv .venv-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & .venv-test/Scripts/python.exe -m pip install -r osint_tool/requirements-test.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & .venv-test/Scripts/python.exe -m unittest discover -s tests -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node --test tests/web_ui.test.cjs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -File windows_tools/tests/Core.Tests.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build desktop-only OSINT package and both Windows utilities
         run: |
           python osint_tool/build.py
