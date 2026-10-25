@@ -16,7 +16,7 @@ from osint_tool.core.network import public_addresses, public_socket
 
 class SecurityTests(unittest.TestCase):
     def test_private_targets_are_blocked_and_public_sockets_are_pinned(self):
-        for address in ('127.0.0.1','10.0.0.1','192.168.0.1','169.254.169.254','::1','::ffff:127.0.0.1'):
+        for address in ('127.0.0.1','10.0.0.1','192.168.0.1','169.254.169.254','224.0.0.1','::1','::ffff:127.0.0.1'):
             with patch('socket.getaddrinfo', return_value=[(0,0,0,'',(address,443))]), self.assertRaises(ValueError):
                 public_addresses('untrusted.example',443)
         with patch('socket.getaddrinfo', return_value=[(0,0,0,'',('8.8.8.8',443))]), \

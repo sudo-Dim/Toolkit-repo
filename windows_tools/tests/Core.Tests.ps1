@@ -143,7 +143,7 @@ try {
     Assert ($global:ToolkitDiagnosticTestState.Cim.Win32_OperatingSystem -eq 1 -and $global:ToolkitDiagnosticTestState.Cim.Win32_Processor -eq 1) 'Reuse CIM snapshots'
     Assert ($global:ToolkitDiagnosticTestState.Processes -eq 1) 'Reuse process snapshot across all network connections'
     Assert ($data.Network.Count -eq 20 -and $data.Network[0].Process -eq 'Sample') 'Cached process names must retain every connection'
-    Assert ($data.Network[0].LocalAddr -eq '[::1]:1') 'IPv6 address and port must remain unambiguous'
+    Assert (@($data.Network.LocalAddr | Where-Object { $_ -eq '[::1]:1' }).Count -eq 1) 'IPv6 address and port must remain unambiguous'
     Assert (@($data.Errors | Where-Object Error -like '*Security log access denied*').Count -eq 1) 'Access denied must appear as a collection error'
     Assert (@($data.Security | Where-Object Status -eq 'Fail').Count -eq 0) 'Unknown readings must not become failed security checks'
     Assert (@($data.Security | Where-Object Status -eq 'Unknown').Count -ge 4) 'Unreadable security checks must be marked unknown'

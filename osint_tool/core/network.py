@@ -9,7 +9,8 @@ def public_addresses(host, port):
         raise ValueError('Lokale Netzwerkziele sind nicht erlaubt')
     addresses = list(dict.fromkeys(item[4][0] for item in
                                   socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)))
-    if not addresses or any(not ipaddress.ip_address(address.split('%')[0]).is_global for address in addresses):
+    parsed = [ipaddress.ip_address(address.split('%')[0]) for address in addresses]
+    if not addresses or any(not address.is_global or address.is_multicast or address.is_reserved for address in parsed):
         raise ValueError('Private, lokale und reservierte Netzwerkziele sind nicht erlaubt')
     return addresses
 
