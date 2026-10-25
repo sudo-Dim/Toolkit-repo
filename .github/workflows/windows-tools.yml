@@ -1,0 +1,39 @@
+name: Portable Windows utilities
+on:
+  workflow_dispatch:
+  push:
+    paths: ['windows_tools/**', '.github/workflows/windows-tools.yml']
+  pull_request:
+    paths: ['windows_tools/**', '.github/workflows/windows-tools.yml']
+permissions:
+  contents: read
+jobs:
+  build-and-check:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Windows PowerShell 5.1 core logic without modifying the host
+        run: ./windows_tools/tests/Core.Tests.ps1
+      - name: Build using the Windows .NET Framework compiler
+        run: ./windows_tools/Build.ps1
+      - name: Open both native GUIs and test their background workers
+        run: |
+          foreach ($name in @('SecurityDashboard','WindowsDebloat')) {
+            $process = Start-Process -FilePath "dist/windows-tools/$name.exe" -ArgumentList '--self-test' -PassThru
+            if (-not $process.WaitForExit(60000)) { $process.Kill(); throw "$name GUI timed out" }
+            if ($process.ExitCode -ne 0) { throw "$name GUI test failed: $($process.ExitCode)" }
+          }
+      - name: Exercise real read-only Windows collection and HTML export
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'diagnostic.html'
+          $data = & ./windows_tools/diagnostic/Collect-Diagnostics.ps1 -OutputPath $report
+          if (-not $data.System.OS -or -not $data.Hardware.CPUName -or -not (Test-Path $report)) { throw 'Windows collection failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Portable-Windows-utilities-x64
+          path: dist/windows-tools/*-windows-x64.zip
+          if-no-files-found: error

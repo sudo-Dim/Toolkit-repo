@@ -278,6 +278,9 @@ class EmailModule(BaseModule):
         return False
 
     def _check_account_site(self, site: dict, tokens: dict, session) -> dict:
+        if site.get("manual_only"):
+            return {"site": site["name"], "category": site.get("category", "Account"),
+                    "verdict": "inconclusive", "error": "Nur manuell: kein automatischer Passwort-Reset"}
         url = self._tmpl(site["url"], tokens)
         method = site.get("method", "GET").upper()
         headers = self._tmpl(site.get("headers", {}), tokens)
@@ -359,68 +362,12 @@ class EmailModule(BaseModule):
         return info
 
     def _chk_ebay(self, email: str) -> dict:
-        info = {"site": "eBay", "category": "Marktplatz", "reliability": "medium"}
-        try:
-            s = self._fresh_session()
-            r1 = s.get("https://www.ebay.com/signin/", timeout=self._acct_timeout)
-            srt = self._search([r'name="srt"[^>]*value="([^"]+)"', r'"srt"\s*:\s*"([^"]+)"'], r1.text)
-            if not srt:
-                info["verdict"] = "inconclusive"
-                info["error"] = "srt-Token nicht gefunden"
-                return info
-            r2 = s.post("https://signin.ebay.com/signin/srv/identifer",
-                        data={"identifier": email, "srt": srt},
-                        headers={"Accept": "application/json, text/plain, */*",
-                                 "Origin": "https://www.ebay.com",
-                                 "Referer": "https://www.ebay.com/signin/",
-                                 "X-Requested-With": "XMLHttpRequest"},
-                        timeout=self._acct_timeout)
-            try:
-                js = r2.json()
-            except Exception:
-                js = None
-            if isinstance(js, dict) and len(js) > 0:
-                info["verdict"] = "notexists" if "err" in js else "exists"
-            else:
-                info["verdict"] = "inconclusive"
-        except Exception as exc:
-            info["verdict"] = "inconclusive"
-            info["error"] = str(exc)
-        return info
+        return {"site": "eBay", "category": "Marktplatz", "reliability": "low",
+                "verdict": "inconclusive", "error": "Nur manuell: keine automatische Anmeldung oder OTP-Anforderung"}
 
     def _chk_amazon(self, email: str) -> dict:
-        info = {"site": "Amazon", "category": "Marktplatz", "reliability": "low"}
-        try:
-            s = self._fresh_session()
-            openid = ("https://www.amazon.com/ap/signin?openid.return_to=https%3A%2F%2Fwww.amazon.com%2F"
-                      "&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
-                      "&openid.assoc_handle=usflex&openid.mode=checkid_setup"
-                      "&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
-                      "&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0")
-            r1 = s.get(openid, timeout=self._acct_timeout)
-            fields = dict(re.findall(r'<input[^>]+name="([^"]+)"[^>]+value="([^"]*)"', r1.text))
-            if not fields or "appActionToken" not in " ".join(fields.keys()) + " ".join(fields):
-                # Mindestens ein paar Hidden-Felder erwartet; sonst Captcha/Block
-                if len(fields) < 3:
-                    info["verdict"] = "inconclusive"
-                    info["error"] = "Signin-Formular nicht lesbar (Captcha/Block?)"
-                    return info
-            fields = {k: v for k, v in fields.items() if "password" not in k.lower()}
-            fields["email"] = email
-            r2 = s.post("https://www.amazon.com/ap/signin", data=fields,
-                        headers={"Origin": "https://www.amazon.com", "Referer": openid},
-                        timeout=self._acct_timeout)
-            t = (r2.text or "").lower()
-            if "auth-password-missing-alert" in t:
-                info["verdict"] = "exists"
-            elif "cannot find an account" in t or "we cannot find" in t or "konto" in t and "nicht" in t:
-                info["verdict"] = "notexists"
-            else:
-                info["verdict"] = "inconclusive"
-        except Exception as exc:
-            info["verdict"] = "inconclusive"
-            info["error"] = str(exc)
-        return info
+        return {"site": "Amazon", "category": "Marktplatz", "reliability": "low",
+                "verdict": "inconclusive", "error": "Nur manuell: keine automatische Anmeldung oder OTP-Anforderung"}
 
     def _chk_tumblr(self, email: str) -> dict:
         info = {"site": "Tumblr", "category": "Blog", "reliability": "medium"}

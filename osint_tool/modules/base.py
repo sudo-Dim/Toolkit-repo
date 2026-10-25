@@ -5,6 +5,7 @@ Abstrakte Basisklasse für alle OSINT-Module.
 
 import time
 import logging
+from urllib.parse import quote
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -142,8 +143,22 @@ class BaseModule(ABC):
         self._results.append(result)
 
     def add_error(self, error: str):
+        error = self.redact(error)
         self._errors.append(error)
         self.logger.error(error)
+
+    def redact(self, text: str) -> str:
+        """Requests exceptions may include API keys from URL query parameters."""
+        if self.config:
+            for secret in self.config.api_keys.values():
+                if secret:
+                    text = text.replace(secret, '[REDACTED]').replace(quote(secret, safe=''), '[REDACTED]')
+        return text
+
+    def reset(self):
+        """Entfernt Ergebnisse und Fehler, auch nach einem abgebrochenen Lauf."""
+        self._results = []
+        self._errors = []
 
     def create_report(self, input_value: str, input_type: str,
                       start: float, end: float) -> ModuleReport:
@@ -159,8 +174,7 @@ class BaseModule(ABC):
             duration_seconds=end - start,
         )
         # Reset für nächsten Lauf
-        self._results = []
-        self._errors = []
+        self.reset()
         return report
 
     def accepts_input(self, input_type: str) -> bool:

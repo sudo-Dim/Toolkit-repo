@@ -1,0 +1,3 @@
+# Developer regression checks for the archived web interface only.
+-r requirements-desktop.txt
+Flask==3.1.3

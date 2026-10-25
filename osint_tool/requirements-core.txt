@@ -1,0 +1,9 @@
+# Audited desktop runtime; full phone metadata preserved.
+requests==2.34.2
+phonenumbers==9.0.41
+dnspython==2.9.0
+# Pin transitive HTTP dependencies for reproducible builds.
+urllib3==2.8.0
+certifi==2026.10.23
+idna==3.20
+charset-normalizer==3.5.2

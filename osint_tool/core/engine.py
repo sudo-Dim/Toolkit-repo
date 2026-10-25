@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime
 
 from .config import AppConfig
+from .inputs import clean_input, is_domain, is_ip, normalize_host
 from ..modules import ALL_MODULES, INPUT_TYPE_MAP
 from ..modules.base import BaseModule, ModuleReport
 
@@ -95,19 +96,10 @@ class OSINTEngine:
         """
         Erkennt automatisch den Eingabetyp.
         
-        Reihenfolge der Prüfung:
-        1. E-Mail (enthält @, Punkt nach @)
-        2. IP-Adresse (IPv4/IPv6)
-        3. Domain (enthält Punkt, kein Leerzeichen)
-        4. Telefonnummer (beginnt mit +, 0 oder reine Ziffern mit >6 Stellen)
-        5. Username (kein Leerzeichen)
-        6. Name (Fallback: enthält Leerzeichen)
+        Bilder, E-Mail, gültige IP-/Domain-Adressen, Telefon und Namen;
+        ansonsten Username. HTTP(S)-URLs und IDN-Domains werden unterstützt.
         """
-        value = value.strip()
-
-        # Schutz vor pathologisch langen Eingaben (Regex-Backtracking/DoS)
-        if len(value) > 200:
-            return "username"
+        value = clean_input(value)
 
         # Bild / Gesicht: lokaler Pfad oder URL, die auf eine Bilddatei zeigt
         _img_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff")
@@ -119,20 +111,15 @@ class OSINTEngine:
         if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', value):
             return "email"
 
-        # IPv4
-        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', value):
+        # Host-Adressen mit derselben Normalisierung wie im Domain-Modul.
+        try:
+            host = normalize_host(value)
+        except ValueError:
+            host = ""
+        if is_ip(host):
             return "ip"
-
-        # IPv6
-        if ":" in value and re.match(r'^[0-9a-fA-F:]+$', value):
-            return "ip"
-
-        # Domain (hat Punkt, kein Leerzeichen, kein @)
-        if "." in value and " " not in value and "@" not in value:
-            # Entferne Protokoll für Check
-            clean = re.sub(r'^https?://', '', value).split('/')[0]
-            if re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', clean):
-                return "domain"
+        if is_domain(host):
+            return "domain"
 
         # Telefonnummer
         digits_only = re.sub(r'[\s\-\(\)\/]', '', value)
@@ -151,9 +138,8 @@ class OSINTEngine:
 
     def get_modules_for_type(self, input_type: str) -> List[BaseModule]:
         """Gibt alle Module zurück, die einen bestimmten Eingabetyp verarbeiten."""
-        module_classes = INPUT_TYPE_MAP.get(input_type, [])
-        return [self._modules[cls().name] for cls in module_classes
-                if cls().name in self._modules]
+        return [module for module in self._modules.values()
+                if module.accepts_input(input_type)]
 
     def scan(self, input_value: str, input_type: str,
              module_names: Optional[List[str]] = None) -> ScanResult:
@@ -168,6 +154,16 @@ class OSINTEngine:
         Returns:
             ScanResult mit allen Modulberichten
         """
+        input_value = clean_input(input_value)
+        if not isinstance(input_type, str) or input_type not in self.supported_input_types:
+            raise ValueError(f"Unbekannter Eingabetyp: {input_type}")
+        if module_names:
+            for name in module_names:
+                if name not in self._modules:
+                    raise ValueError(f"Unbekanntes Modul: {name}")
+                if not self._modules[name].accepts_input(input_type):
+                    raise ValueError(f"Modul '{name}' unterstützt '{input_type}' nicht")
+
         job = ScanJob(
             input_value=input_value,
             input_type=input_type,
@@ -195,6 +191,7 @@ class OSINTEngine:
 
         # Module ausführen
         for module in modules:
+            module.reset()
             try:
                 self.logger.info(f"Führe Modul '{module.name}' aus...")
                 report = module.run(input_value, input_type)
@@ -213,6 +210,8 @@ class OSINTEngine:
                     errors=[str(e)],
                 )
                 result.reports.append(error_report)
+            finally:
+                module.reset()
 
         end = time.time()
         result.end_time = datetime.now().isoformat()
