@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([string]$OutputDirectory = (Join-Path $PSScriptRoot '..\dist\windows-tools'))
+param([string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '..\dist\windows-tools' }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'Build requires 64-bit Windows with .NET Framework 4.x.' }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
