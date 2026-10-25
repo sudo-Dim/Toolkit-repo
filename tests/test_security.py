@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import requests
+import socket
 
 from osint_tool.core.config import AppConfig, EMAIL_ACCOUNT_SITES
 from osint_tool.core.http import build_session
@@ -11,10 +12,33 @@ from osint_tool.modules.phone import PhoneModule
 from osint_tool.modules.email_osint import EmailModule
 from osint_tool.modules.face_recognition import FaceModule
 from osint_tool.web import app as web
-from osint_tool.core.network import public_addresses, public_socket
+from osint_tool.core.network import public_addresses, public_socket, public_proxy_target
 
 
 class SecurityTests(unittest.TestCase):
+    def test_proxy_dns_can_work_without_allowing_local_targets(self):
+        with patch('socket.getaddrinfo',side_effect=socket.gaierror('No client DNS')):
+            public_proxy_target('github.com',443)
+            for host in ('localhost','router.local','router.home.arpa','127.0.0.1','2130706433','0x7f.0.0.1','0177.0.0.1'):
+                with self.subTest(host=host), self.assertRaises(ValueError): public_proxy_target(host,80)
+
+    def test_direct_connection_pins_each_public_address_and_retains_host(self):
+        from urllib3.connection import HTTPConnection
+        from urllib3.exceptions import NewConnectionError
+        attempted = []
+        def connect(connection):
+            attempted.append(connection._dns_host)
+            if len(attempted) == 1: raise NewConnectionError(connection,'First address unavailable')
+            return 'connected'
+        with build_session() as session:
+            cls = session.get_adapter('http://').poolmanager.pool_classes_by_scheme['http'].ConnectionCls
+            connection = cls('example.com',80)
+            with patch('socket.getaddrinfo',return_value=[(0,0,0,'',('8.8.8.8',80)),(0,0,0,'',('1.1.1.1',80))]), \
+                 patch.object(HTTPConnection,'_new_conn',connect):
+                self.assertEqual(connection._new_conn(),'connected')
+                self.assertEqual(attempted,['8.8.8.8','1.1.1.1'])
+                self.assertEqual(connection.host,'example.com')
+
     def test_private_targets_are_blocked_and_public_sockets_are_pinned(self):
         for address in ('127.0.0.1','10.0.0.1','192.168.0.1','169.254.169.254','224.0.0.1','::1','::ffff:127.0.0.1'):
             with patch('socket.getaddrinfo', return_value=[(0,0,0,'',(address,443))]), self.assertRaises(ValueError):

@@ -36,7 +36,9 @@ def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA,
     from urllib3.util.retry import Retry
     from urllib3.connection import HTTPConnection, HTTPSConnection
     from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
-    from .network import public_addresses
+    from urllib3.exceptions import NewConnectionError, ConnectTimeoutError
+    from requests.utils import select_proxy
+    from .network import public_addresses, public_proxy_target
 
     class PublicConnection:
         def _new_conn(self):
@@ -47,7 +49,7 @@ def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA,
                 try:
                     self._dns_host = address
                     return super()._new_conn()
-                except OSError as exc:
+                except (OSError, NewConnectionError, ConnectTimeoutError) as exc:
                     error = exc
                 finally:
                     self._dns_host = original
@@ -72,10 +74,10 @@ def build_session(pool_size: int = 32, user_agent: str = DEFAULT_UA,
                 self.poolmanager.pool_classes_by_scheme = {'http': PublicHTTPPool, 'https': PublicHTTPSPool}
 
         def send(self, request, **kwargs):
-            if not allow_private and kwargs.get('proxies'):
+            if not allow_private and select_proxy(request.url, kwargs.get('proxies', {})):
                 target = urlsplit(request.url)
                 # Configured proxies are trusted gateways; still reject locally-resolved private targets.
-                public_addresses(target.hostname, target.port or (443 if target.scheme == 'https' else 80))
+                public_proxy_target(target.hostname, target.port or (443 if target.scheme == 'https' else 80))
             return super().send(request, **kwargs)
 
     class ExplicitAuth(requests.auth.AuthBase):

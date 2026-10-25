@@ -2,6 +2,7 @@
 
 import ipaddress
 import socket
+import re
 
 
 def public_addresses(host, port):
@@ -23,3 +24,22 @@ def public_socket(host, port, timeout):
         except OSError as exc:
             error = exc
     raise error
+
+
+def public_proxy_target(host, port):
+    """A configured proxy may provide DNS when the client has no DNS route."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        name = host.lower().rstrip('.')
+        if ('.' not in name or name.endswith(('.localhost', '.local', '.internal', '.home.arpa'))
+                or re.fullmatch(r'(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+))*', name)):
+            raise ValueError('Lokale Netzwerkziele sind nicht erlaubt')
+    else:
+        if not address.is_global or address.is_multicast or address.is_reserved:
+            raise ValueError('Private Netzwerkziele sind nicht erlaubt')
+    try:
+        public_addresses(host, port)
+    except socket.gaierror:
+        # Trust the explicitly configured proxy's DNS/network policy; never bypass it.
+        pass
